@@ -116,7 +116,9 @@ func TestParsePaths(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result := ParsePaths(tt.envVar)
 			if !reflect.DeepEqual(result, tt.expected) {
 				t.Errorf("ParsePaths() = %v, want %v", result, tt.expected)
