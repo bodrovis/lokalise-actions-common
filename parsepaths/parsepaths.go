@@ -5,23 +5,27 @@ import (
 )
 
 // ParsePaths takes a newline-separated string from an environment variable
-// and returns a slice of cleaned paths. It handles both Unix and Windows
-// line endings and filters out any empty or whitespace-only lines.
+// and returns a slice of cleaned paths. It normalizes line endings and
+// filters out empty or whitespace-only lines.
 func ParsePaths(envVar string) []string {
-	// Split the input string by the newline character '\n'
-	lines := strings.Split(envVar, "\n")
-	var paths []string
+	if envVar == "" {
+		return []string{} // Explicitly return an empty slice
+	}
 
-	for _, line := range lines {
-		// Trim leading and trailing whitespace, including spaces and carriage returns
-		path := strings.TrimSpace(line)
-		if path != "" {
+	// Normalize line endings (Windows-style to Unix-style)
+	normalized := strings.ReplaceAll(envVar, "\r\n", "\n")
+
+	// Split the input string into lines and process each line
+	var paths []string
+	for _, line := range strings.Split(normalized, "\n") {
+		path := strings.TrimSpace(line) // Trim whitespace
+		if path != "" {                 // Ignore empty lines
 			paths = append(paths, path)
 		}
 	}
 
-	if paths == nil {
-		return []string{}
+	if len(paths) == 0 {
+		return []string{} // Explicitly return an empty slice
 	}
 
 	return paths
