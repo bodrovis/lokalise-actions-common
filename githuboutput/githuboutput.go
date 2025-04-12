@@ -1,6 +1,7 @@
 package githuboutput
 
 import (
+	"log"
 	"os"
 )
 
@@ -21,7 +22,11 @@ func WriteToGitHubOutput(name, value string) bool {
 	if err != nil {
 		return false // Unable to open the GITHUB_OUTPUT file
 	}
-	defer file.Close()
+	defer func() {
+		if cerr := file.Close(); cerr != nil {
+			log.Printf("Failed to close GITHUB_OUTPUT file (%s): %v", githubOutput, cerr)
+		}
+	}()
 
 	// Write the key-value pair to the file in the format: name=value
 	_, err = file.WriteString(name + "=" + value + "\n")

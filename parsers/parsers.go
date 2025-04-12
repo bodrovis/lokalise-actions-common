@@ -1,6 +1,7 @@
 package parsers
 
 import (
+	"bufio"
 	"os"
 	"strconv"
 	"strings"
@@ -8,30 +9,53 @@ import (
 
 // ParseStringArrayEnv parses a string environment variable into an array of strings.
 // It trims spaces, normalizes line endings, and removes empty lines.
+// func ParseStringArrayEnv(envVar string) []string {
+// 	val := os.Getenv(envVar)
+// 	if val == "" {
+// 		return []string{}
+// 	}
+
+// 	// Normalize line endings and other potential separators
+// 	normalized := strings.ReplaceAll(val, "\r\n", "\n")     // Normalize Windows to Unix
+// 	normalized = strings.ReplaceAll(normalized, "\r", "\n") // Handle stray carriage returns
+
+// 	// Split and clean
+// 	var paths []string
+// 	for _, line := range strings.Split(normalized, "\n") {
+// 		path := strings.TrimSpace(line) // Remove extra spaces
+// 		if path != "" {                 // Ignore empty lines
+// 			paths = append(paths, path)
+// 		}
+// 	}
+
+// 	if len(paths) == 0 {
+// 		return []string{}
+// 	}
+
+// 	return paths
+// }
+
 func ParseStringArrayEnv(envVar string) []string {
 	val := os.Getenv(envVar)
 	if val == "" {
 		return []string{}
 	}
 
-	// Normalize line endings and other potential separators
-	normalized := strings.ReplaceAll(val, "\r\n", "\n")     // Normalize Windows to Unix
-	normalized = strings.ReplaceAll(normalized, "\r", "\n") // Handle stray carriage returns
+	// Normalize line endings to Unix-style
+	val = strings.ReplaceAll(val, "\r\n", "\n")
+	val = strings.ReplaceAll(val, "\r", "\n")
 
-	// Split and clean
-	var paths []string
-	for _, line := range strings.Split(normalized, "\n") {
-		path := strings.TrimSpace(line) // Remove extra spaces
-		if path != "" {                 // Ignore empty lines
-			paths = append(paths, path)
+	scanner := bufio.NewScanner(strings.NewReader(val))
+	var result []string
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line != "" {
+			result = append(result, line)
 		}
 	}
 
-	if len(paths) == 0 {
-		return []string{}
-	}
-
-	return paths
+	return result
 }
 
 // ParseBoolEnv parses a boolean environment variable.

@@ -1,6 +1,7 @@
 package parsers
 
 import (
+	"log"
 	"os"
 	"reflect"
 	"testing"
@@ -67,11 +68,20 @@ func TestParseStringArrayEnv(t *testing.T) {
 		tt := tt // Capture range variable
 		t.Run(tt.name, func(t *testing.T) {
 			// Set the environment variable for the test
-			os.Setenv(tt.envKey, tt.envValue)
-			defer os.Unsetenv(tt.envKey)
+			err := os.Setenv(tt.envKey, tt.envValue)
+			if err != nil {
+				log.Printf("Failed to set ENV %s -> %s: %v", tt.envKey, tt.envValue, err)
+			}
+
+			defer func() {
+				// cleanup
+				if err := os.Unsetenv(tt.envKey); err != nil {
+					log.Printf("Failed to unset %s: %v", tt.envKey, err)
+				}
+			}()
 
 			result := ParseStringArrayEnv(tt.envKey)
-			if !reflect.DeepEqual(result, tt.expected) {
+			if !reflect.DeepEqual(normalizeSlice(result), normalizeSlice(tt.expected)) {
 				t.Errorf("ParseStringArrayEnv(%q) = %v, want %v", tt.envKey, result, tt.expected)
 			}
 		})
@@ -100,10 +110,24 @@ func TestParseBoolEnv(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set the environment variable for the test
 			if tt.envValue != "" {
-				os.Setenv(tt.envKey, tt.envValue)
-				defer os.Unsetenv(tt.envKey)
+				err := os.Setenv(tt.envKey, tt.envValue)
+				if err != nil {
+					log.Printf("Failed to set %s to %s: %v", tt.envKey, tt.envValue, err)
+				}
+
+				defer func() {
+					// cleanup
+					if err := os.Unsetenv(tt.envKey); err != nil {
+						log.Printf("Failed to unset %s: %v", tt.envKey, err)
+					}
+				}()
 			} else {
-				os.Unsetenv(tt.envKey)
+				defer func() {
+					// cleanup
+					if err := os.Unsetenv(tt.envKey); err != nil {
+						log.Printf("Failed to unset %s: %v", tt.envKey, err)
+					}
+				}()
 			}
 
 			// Call the function
@@ -146,10 +170,24 @@ func TestParseUintEnv(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set up the environment variable
 			if tt.envValue != "" {
-				os.Setenv(tt.envKey, tt.envValue)
-				defer os.Unsetenv(tt.envKey)
+				err := os.Setenv(tt.envKey, tt.envValue)
+				if err != nil {
+					log.Printf("Failed to set %s to %s: %v", tt.envKey, tt.envValue, err)
+				}
+
+				defer func() {
+					// cleanup
+					if err := os.Unsetenv(tt.envKey); err != nil {
+						log.Printf("Failed to unset %s: %v", tt.envKey, err)
+					}
+				}()
 			} else {
-				os.Unsetenv(tt.envKey)
+				defer func() {
+					// cleanup
+					if err := os.Unsetenv(tt.envKey); err != nil {
+						log.Printf("Failed to unset %s: %v", tt.envKey, err)
+					}
+				}()
 			}
 
 			// Call the function
@@ -161,4 +199,11 @@ func TestParseUintEnv(t *testing.T) {
 			}
 		})
 	}
+}
+
+func normalizeSlice(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }

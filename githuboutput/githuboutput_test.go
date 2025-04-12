@@ -1,6 +1,7 @@
 package githuboutput
 
 import (
+	"log"
 	"os"
 	"testing"
 )
@@ -8,7 +9,12 @@ import (
 func TestWriteToGitHubOutput(t *testing.T) {
 	// Save the original GITHUB_OUTPUT value to restore it after tests
 	originalGithubOutput := os.Getenv("GITHUB_OUTPUT")
-	defer os.Setenv("GITHUB_OUTPUT", originalGithubOutput)
+	defer func() {
+		// cleanup
+		if err := os.Setenv("GITHUB_OUTPUT", originalGithubOutput); err != nil {
+			log.Printf("Failed to restore GITHUB_OUTPUT: %v", err)
+		}
+	}()
 
 	tests := []struct {
 		name                string
@@ -84,9 +90,29 @@ func TestWriteToGitHubOutput(t *testing.T) {
 					if err != nil {
 						t.Fatalf("Failed to create temporary file: %v", err)
 					}
-					defer os.Remove(tempFile.Name()) // Clean up after test
-					os.Setenv("GITHUB_OUTPUT", tempFile.Name())
-					defer os.Unsetenv("GITHUB_OUTPUT")
+
+					if err := tempFile.Close(); err != nil {
+						t.Fatalf("Failed to close temp file: %v", err)
+					}
+
+					defer func() {
+						// cleanup
+						if err := os.Remove(tempFile.Name()); err != nil {
+							log.Printf("Failed to remove tempfile (%s): %v", tempFile.Name(), err)
+						}
+					}()
+
+					err = os.Setenv("GITHUB_OUTPUT", tempFile.Name())
+					if err != nil {
+						log.Printf("Failed to set GITHUB_OUTPUT to %s: %v", tempFile.Name(), err)
+					}
+
+					defer func() {
+						// cleanup
+						if err := os.Unsetenv("GITHUB_OUTPUT"); err != nil {
+							log.Printf("Failed to unset GITHUB_OUTPUT: %v", err)
+						}
+					}()
 
 					if tt.name == "Write multiple times, data should append" {
 						// First write
@@ -118,22 +144,37 @@ func TestWriteToGitHubOutput(t *testing.T) {
 					}
 				} else {
 					// GITHUB_OUTPUT is set to an invalid path
-					os.Setenv("GITHUB_OUTPUT", tt.envVarValue)
-					defer os.Unsetenv("GITHUB_OUTPUT")
+					err := os.Setenv("GITHUB_OUTPUT", tt.envVarValue)
+					if err != nil {
+						log.Printf("Failed to set GITHUB_OUTPUT to %s: %v", tt.envVarValue, err)
+					}
+
+					defer func() {
+						// cleanup
+						if err := os.Unsetenv("GITHUB_OUTPUT"); err != nil {
+							log.Printf("Failed to unset GITHUB_OUTPUT: %v", err)
+						}
+					}()
+
 					result := WriteToGitHubOutput(tt.nameInput, tt.valueInput)
 					if result != tt.expectedReturn {
 						t.Errorf("Expected WriteToGitHubOutput to return %v, got %v", tt.expectedReturn, result)
 					}
 
 					// Ensure that the file does not exist
-					_, err := os.Stat(tt.envVarValue)
+					_, err = os.Stat(tt.envVarValue)
 					if !os.IsNotExist(err) {
 						t.Errorf("Expected file %v to not exist, but it does", tt.envVarValue)
 					}
 				}
 			} else {
 				// GITHUB_OUTPUT is not set
-				os.Unsetenv("GITHUB_OUTPUT")
+				defer func() {
+					// cleanup
+					if err := os.Unsetenv("GITHUB_OUTPUT"); err != nil {
+						log.Printf("Failed to unset GITHUB_OUTPUT: %v", err)
+					}
+				}()
 				result := WriteToGitHubOutput(tt.nameInput, tt.valueInput)
 				if result != tt.expectedReturn {
 					t.Errorf("Expected WriteToGitHubOutput to return %v, got %v", tt.expectedReturn, result)
