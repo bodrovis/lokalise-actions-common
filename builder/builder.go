@@ -118,12 +118,6 @@ func buildBinary(srcDir, outputDir, binaryName string) ([]string, error) {
 		if err := cmd.Run(); err != nil {
 			return nil, fmt.Errorf("failed to build for %s/%s: %w", t.goos, t.goarch, err)
 		}
-		if checkCommand("strip") {
-			fmt.Println("Stripping binary:", out)
-			if err := exec.Command("strip", out).Run(); err != nil {
-				log.Printf("strip failed for %s: %v", out, err)
-			}
-		}
 		paths = append(paths, out)
 	}
 	return paths, nil
