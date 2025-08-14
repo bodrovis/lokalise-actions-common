@@ -18,6 +18,10 @@ func New(limit int) *Ring {
 	return &Ring{limit: limit}
 }
 
+func NewKB(kb int) *Ring {
+	return New(kb * 1024)
+}
+
 // Write appends p, keeping only the last limit bytes.
 func (r *Ring) Write(p []byte) (int, error) {
 	r.mu.Lock()
