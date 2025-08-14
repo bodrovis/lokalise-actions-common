@@ -101,7 +101,9 @@ func TestTeeWritesBoth(t *testing.T) {
 	r := New(4)
 	var dst bytes.Buffer
 	w := Tee(&dst, r)
-	io.WriteString(w, "hello")
+	if _, err := io.WriteString(w, "hello"); err != nil {
+		t.Fatalf("WriteString failed: %v", err)
+	}
 
 	if dst.String() != "hello" {
 		t.Fatalf("tee dst mismatch: got %q, want %q", dst.String(), "hello")
@@ -114,7 +116,10 @@ func TestTeeWritesBoth(t *testing.T) {
 func TestTeeWithNilDst(t *testing.T) {
 	r := New(3)
 	w := Tee(nil, r)
-	io.WriteString(w, "abcd")
+	if _, err := io.WriteString(w, "abcd"); err != nil {
+		t.Fatalf("WriteString failed: %v", err)
+	}
+
 	if r.String() != "bcd" {
 		t.Fatalf("got %q, want %q", r.String(), "bcd")
 	}
