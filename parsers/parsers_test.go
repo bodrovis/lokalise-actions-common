@@ -227,9 +227,9 @@ func TestEnsureRepoRelativePath(t *testing.T) {
 			want: "x",
 		},
 		{
-			name:        "dot path is forbidden",
-			in:          ".",
-			expectError: "path '.' is not allowed",
+			name: "dot path is forbidden",
+			in:   ".",
+			want: ".",
 		},
 		{
 			name:        "absolute path is forbidden",

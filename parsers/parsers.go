@@ -35,25 +35,36 @@ func ParseStringArrayEnv(envVar string) []string {
 }
 
 // EnsureRepoRelativePath validates a single path is repo-relative and safe.
-// Rules:
-//   - forbid empty/whitespace
-//   - forbid "."
-//   - forbid absolute paths (POSIX, Windows drive, UNC)
-//   - forbid escaping above repo root ("..", "../")
-//   - forbid drive-relative like "C:foo"
-//   - forbid glob metachars in TRANSLATIONS_PATH level: * ? [ ]
+// Allowed:
+//   - "." => repo root
+//   - relative subdirs/files like "locales", "packages/app/locales", "./locales"
 //
-// Returns the cleaned path (still OS-native separators), caller may ToSlash it.
+// Forbidden:
+//   - empty/whitespace
+//   - absolute (POSIX, Windows drive, UNC)
+//   - parent escapes ("..", "../")
+//   - drive-relative like "C:foo"
+//   - glob metachars: * ? [ ]
+//   - tilde-expansion "~", "~user"
+//
+// Returns a cleaned path (OS-native separators). Caller may ToSlash it.
 func EnsureRepoRelativePath(p string) (string, error) {
 	p = strings.TrimSpace(p)
 	if p == "" {
 		return "", fmt.Errorf("empty path")
 	}
 
+	if strings.ContainsRune(p, '\x00') {
+		return "", fmt.Errorf("invalid path: contains NUL")
+	}
+	if strings.HasPrefix(p, "~") {
+		return "", fmt.Errorf("path must be relative to repo (no ~ expansion): %q", p)
+	}
+
 	clean := filepath.Clean(p)
 
 	if clean == "." {
-		return "", fmt.Errorf("path '.' is not allowed; specify a subdirectory: %q", p)
+		return ".", nil
 	}
 
 	if filepath.IsAbs(clean) {
@@ -70,6 +81,7 @@ func EnsureRepoRelativePath(p string) (string, error) {
 		return "", fmt.Errorf("path escapes repo root: %q", p)
 	}
 
+	// Windows drive-relative "C:foo"
 	if len(s) >= 2 && s[1] == ':' && ((s[0] >= 'A' && s[0] <= 'Z') || (s[0] >= 'a' && s[0] <= 'z')) {
 		return "", fmt.Errorf("path must be relative (drive-prefixed): %q", p)
 	}
