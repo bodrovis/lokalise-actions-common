@@ -3,7 +3,9 @@ package parsers
 import (
 	"log"
 	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -65,9 +67,7 @@ func TestParseStringArrayEnv(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt // Capture range variable
 		t.Run(tt.name, func(t *testing.T) {
-			// Set the environment variable for the test
 			err := os.Setenv(tt.envKey, tt.envValue)
 			if err != nil {
 				log.Printf("Failed to set ENV %s -> %s: %v", tt.envKey, tt.envValue, err)
@@ -199,6 +199,179 @@ func TestParseUintEnv(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestEnsureRepoRelativePath(t *testing.T) {
+	type tc struct {
+		name        string
+		in          string
+		want        string
+		expectError string
+	}
+	absPath, _ := filepath.Abs("some/abs/path")
+
+	cases := []tc{
+		{
+			name: "simple relative",
+			in:   "a/b",
+			want: "a/b",
+		},
+		{
+			name: "normalizes ./ and // and ..",
+			in:   "./a//b/../c",
+			want: "a/c",
+		},
+		{
+			name: "trims trailing slash",
+			in:   "x/",
+			want: "x",
+		},
+		{
+			name:        "dot path is forbidden",
+			in:          ".",
+			expectError: "path '.' is not allowed",
+		},
+		{
+			name:        "absolute path is forbidden",
+			in:          absPath,
+			expectError: "path must be relative to repo",
+		},
+		{
+			name:        "parent escape is forbidden (../)",
+			in:          "../outside",
+			expectError: "escapes repo root",
+		},
+		{
+			name:        "parent escape after clean a/../../b",
+			in:          "a/../../b",
+			expectError: "escapes repo root",
+		},
+		{
+			name:        "UNC-like path forbidden",
+			in:          "//server/share",
+			expectError: "path must be relative to repo",
+		},
+		{
+			name:        "drive-prefixed relative forbidden",
+			in:          "C:foo",
+			expectError: "drive-prefixed",
+		},
+		{
+			name:        "glob meta * forbidden",
+			in:          "locales/*",
+			expectError: "glob characters are not allowed",
+		},
+		{
+			name:        "glob meta ? forbidden",
+			in:          "foo?.yml",
+			expectError: "glob characters are not allowed",
+		},
+		{
+			name:        "glob meta [] forbidden",
+			in:          "bar[0]",
+			expectError: "glob characters are not allowed",
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := EnsureRepoRelativePath(tt.in)
+			if tt.expectError != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.expectError) {
+					t.Fatalf("expected error containing %q, got %v", tt.expectError, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if filepath.ToSlash(got) != tt.want {
+				t.Fatalf("got %q, want %q", filepath.ToSlash(got), tt.want)
+			}
+		})
+	}
+}
+
+func TestParseRepoRelativePathsEnv(t *testing.T) {
+	allKeys := []string{
+		"TEST_PATHS",
+	}
+	for _, k := range allKeys {
+		t.Setenv(k, "")
+	}
+
+	t.Run("valid multiple, normalize and dedupe order-preserving", func(t *testing.T) {
+		// ./x, x/, x  -> "x"; a//b/../c -> a/c
+		val := strings.Join([]string{
+			"./x",
+			"x/",
+			"./y",
+			"a//b/../c",
+			"x",
+		}, "\n")
+		t.Setenv("TEST_PATHS", val)
+
+		got, err := ParseRepoRelativePathsEnv("TEST_PATHS")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		want := []string{"x", "y", "a/c"}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("single valid", func(t *testing.T) {
+		t.Setenv("TEST_PATHS", "locales")
+		got, err := ParseRepoRelativePathsEnv("TEST_PATHS")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		want := []string{"locales"}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("required env missing -> error", func(t *testing.T) {
+		t.Setenv("TEST_PATHS", "")
+		_, err := ParseRepoRelativePathsEnv("TEST_PATHS")
+		if err == nil || !strings.Contains(err.Error(), "required") {
+			t.Fatalf("expected required error, got %v", err)
+		}
+	})
+
+	t.Run("first invalid path -> error (glob)", func(t *testing.T) {
+		t.Setenv("TEST_PATHS", "locales/*\nvalid")
+		_, err := ParseRepoRelativePathsEnv("TEST_PATHS")
+		if err == nil || !strings.Contains(err.Error(), "glob characters") {
+			t.Fatalf("expected glob error, got %v", err)
+		}
+	})
+
+	t.Run("mixed valid and invalid -> error at invalid", func(t *testing.T) {
+		t.Setenv("TEST_PATHS", "a\n../up\nb")
+		_, err := ParseRepoRelativePathsEnv("TEST_PATHS")
+		if err == nil || !strings.Contains(err.Error(), "escapes repo root") {
+			t.Fatalf("expected escape error, got %v", err)
+		}
+	})
+
+	t.Run("UNC-like path -> error", func(t *testing.T) {
+		t.Setenv("TEST_PATHS", "//server/share")
+		_, err := ParseRepoRelativePathsEnv("TEST_PATHS")
+		if err == nil || !strings.Contains(err.Error(), "relative to repo") {
+			t.Fatalf("expected relative-to-repo error, got %v", err)
+		}
+	})
+
+	t.Run("drive-prefixed relative -> error", func(t *testing.T) {
+		t.Setenv("TEST_PATHS", "C:foo")
+		_, err := ParseRepoRelativePathsEnv("TEST_PATHS")
+		if err == nil || !strings.Contains(err.Error(), "drive-prefixed") {
+			t.Fatalf("expected drive-prefixed error, got %v", err)
+		}
+	})
 }
 
 func normalizeSlice(s []string) []string {

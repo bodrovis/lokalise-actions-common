@@ -2,7 +2,9 @@ package parsers
 
 import (
 	"bufio"
+	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -30,6 +32,85 @@ func ParseStringArrayEnv(envVar string) []string {
 	}
 
 	return result
+}
+
+// EnsureRepoRelativePath validates a single path is repo-relative and safe.
+// Rules:
+//   - forbid empty/whitespace
+//   - forbid "."
+//   - forbid absolute paths (POSIX, Windows drive, UNC)
+//   - forbid escaping above repo root ("..", "../")
+//   - forbid drive-relative like "C:foo"
+//   - forbid glob metachars in TRANSLATIONS_PATH level: * ? [ ]
+//
+// Returns the cleaned path (still OS-native separators), caller may ToSlash it.
+func EnsureRepoRelativePath(p string) (string, error) {
+	p = strings.TrimSpace(p)
+	if p == "" {
+		return "", fmt.Errorf("empty path")
+	}
+
+	clean := filepath.Clean(p)
+
+	if clean == "." {
+		return "", fmt.Errorf("path '.' is not allowed; specify a subdirectory: %q", p)
+	}
+
+	if filepath.IsAbs(clean) {
+		return "", fmt.Errorf("path must be relative to repo: %q", p)
+	}
+
+	s := filepath.ToSlash(clean)
+
+	if strings.HasPrefix(s, "/") || strings.HasPrefix(s, "//") {
+		return "", fmt.Errorf("path must be relative to repo: %q", p)
+	}
+
+	if s == ".." || strings.HasPrefix(s, "../") {
+		return "", fmt.Errorf("path escapes repo root: %q", p)
+	}
+
+	if len(s) >= 2 && s[1] == ':' && ((s[0] >= 'A' && s[0] <= 'Z') || (s[0] >= 'a' && s[0] <= 'z')) {
+		return "", fmt.Errorf("path must be relative (drive-prefixed): %q", p)
+	}
+
+	if strings.ContainsAny(s, `*?[]`) {
+		return "", fmt.Errorf("invalid path %q in TRANSLATIONS_PATH: glob characters are not allowed", p)
+	}
+
+	return clean, nil
+}
+
+// ParseRepoRelativePathsEnv reads an env var as multiline list (using ParseStringArrayEnv),
+// validates each item with EnsureRepoRelativePath, normalizes to forward slashes,
+// deduplicates (order-preserving), and returns the set.
+// Returns an error if the env var is empty or all entries are invalid.
+func ParseRepoRelativePathsEnv(envVar string) ([]string, error) {
+	raw := ParseStringArrayEnv(envVar)
+	if len(raw) == 0 {
+		return nil, fmt.Errorf("environment variable %s is required", envVar)
+	}
+
+	seen := make(map[string]struct{}, len(raw))
+	out := make([]string, 0, len(raw))
+
+	for _, p := range raw {
+		clean, err := EnsureRepoRelativePath(p)
+		if err != nil {
+			return nil, fmt.Errorf("invalid path %q in %s: %w", p, envVar, err)
+		}
+		norm := filepath.ToSlash(clean)
+		if _, dup := seen[norm]; dup {
+			continue
+		}
+		seen[norm] = struct{}{}
+		out = append(out, norm)
+	}
+
+	if len(out) == 0 {
+		return nil, fmt.Errorf("no valid paths found in %s", envVar)
+	}
+	return out, nil
 }
 
 // ParseBoolEnv parses a boolean environment variable.

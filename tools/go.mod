@@ -1,3 +1,3 @@
 module github.com/bodrovis/lokalise-actions-common/tools
 
-go 1.24
+go 1.25
