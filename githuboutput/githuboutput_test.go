@@ -1,184 +1,195 @@
 package githuboutput
 
 import (
-	"log"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
 func TestWriteToGitHubOutput(t *testing.T) {
-	// Save the original GITHUB_OUTPUT value to restore it after tests
-	originalGithubOutput := os.Getenv("GITHUB_OUTPUT")
-	defer func() {
-		// cleanup
-		if err := os.Setenv("GITHUB_OUTPUT", originalGithubOutput); err != nil {
-			log.Printf("Failed to restore GITHUB_OUTPUT: %v", err)
-		}
-	}()
-
 	tests := []struct {
-		name                string
-		envVarValue         string // Value to set GITHUB_OUTPUT to
-		nameInput           string
-		valueInput          string
-		expectedReturn      bool
-		expectedFileContent string
+		name         string
+		setup        func(t *testing.T) (outputPath string, verify bool)
+		write        func(t *testing.T)
+		wantReturn   bool
+		wantFile     bool
+		wantFileBody string
 	}{
 		{
-			name:           "GITHUB_OUTPUT not set",
-			envVarValue:    "",
-			nameInput:      "key",
-			valueInput:     "value",
-			expectedReturn: false,
+			name: "GITHUB_OUTPUT not set",
+			setup: func(t *testing.T) (string, bool) {
+				// Ensure truly unset even on GitHub runner
+				_ = os.Unsetenv("GITHUB_OUTPUT")
+				return "", false
+			},
+			write: func(t *testing.T) {
+				got := WriteToGitHubOutput("key", "value")
+				if got != false {
+					t.Fatalf("expected false, got %v", got)
+				}
+			},
+			wantReturn: false,
+			wantFile:   false,
 		},
 		{
-			name:                "GITHUB_OUTPUT set, write succeeds",
-			envVarValue:         "tempfile",
-			nameInput:           "key",
-			valueInput:          "value",
-			expectedReturn:      true,
-			expectedFileContent: "key=value\n",
+			name: "GITHUB_OUTPUT set, write succeeds",
+			setup: func(t *testing.T) (string, bool) {
+				f, err := os.CreateTemp("", "github_output_test")
+				if err != nil {
+					t.Fatalf("CreateTemp: %v", err)
+				}
+				path := f.Name()
+				_ = f.Close()
+
+				t.Cleanup(func() { _ = os.Remove(path) })
+				t.Setenv("GITHUB_OUTPUT", path)
+				return path, true
+			},
+			write: func(t *testing.T) {
+				got := WriteToGitHubOutput("key", "value")
+				if got != true {
+					t.Fatalf("expected true, got %v", got)
+				}
+			},
+			wantReturn:   true,
+			wantFile:     true,
+			wantFileBody: "key=value\n",
 		},
 		{
-			name:           "GITHUB_OUTPUT set to invalid path",
-			envVarValue:    "/invalid/path/to/file",
-			nameInput:      "key",
-			valueInput:     "value",
-			expectedReturn: false,
+			name: "GITHUB_OUTPUT set to invalid path",
+			setup: func(t *testing.T) (string, bool) {
+				// Use a path that should be invalid on all OSes:
+				// a file inside a non-existent directory.
+				p := filepath.Join(os.TempDir(), "definitely-not-exist-12345", "out.txt")
+				t.Setenv("GITHUB_OUTPUT", p)
+				return p, false
+			},
+			write: func(t *testing.T) {
+				got := WriteToGitHubOutput("key", "value")
+				if got != false {
+					t.Fatalf("expected false, got %v", got)
+				}
+			},
+			wantReturn: false,
+			wantFile:   false,
 		},
 		{
-			name:                "Write multiple times, data should append",
-			envVarValue:         "tempfile",
-			nameInput:           "key1",
-			valueInput:          "value1",
-			expectedReturn:      true,
-			expectedFileContent: "key1=value1\nkey2=value2\n",
+			name: "Write multiple times, data should append",
+			setup: func(t *testing.T) (string, bool) {
+				f, err := os.CreateTemp("", "github_output_test")
+				if err != nil {
+					t.Fatalf("CreateTemp: %v", err)
+				}
+				path := f.Name()
+				_ = f.Close()
+
+				t.Cleanup(func() { _ = os.Remove(path) })
+				t.Setenv("GITHUB_OUTPUT", path)
+				return path, true
+			},
+			write: func(t *testing.T) {
+				if got := WriteToGitHubOutput("key1", "value1"); got != true {
+					t.Fatalf("first write: expected true, got %v", got)
+				}
+				if got := WriteToGitHubOutput("key2", "value2"); got != true {
+					t.Fatalf("second write: expected true, got %v", got)
+				}
+			},
+			wantReturn:   true,
+			wantFile:     true,
+			wantFileBody: "key1=value1\nkey2=value2\n",
 		},
 		{
-			name:                "Empty name and value",
-			envVarValue:         "tempfile",
-			nameInput:           "",
-			valueInput:          "",
-			expectedReturn:      true,
-			expectedFileContent: "=\n",
+			name: "Empty name and value",
+			setup: func(t *testing.T) (string, bool) {
+				f, err := os.CreateTemp("", "github_output_test")
+				if err != nil {
+					t.Fatalf("CreateTemp: %v", err)
+				}
+				path := f.Name()
+				_ = f.Close()
+
+				t.Cleanup(func() { _ = os.Remove(path) })
+				t.Setenv("GITHUB_OUTPUT", path)
+				return path, true
+			},
+			write: func(t *testing.T) {
+				got := WriteToGitHubOutput("", "")
+				if got != true {
+					t.Fatalf("expected true, got %v", got)
+				}
+			},
+			wantReturn:   true,
+			wantFile:     true,
+			wantFileBody: "=\n",
 		},
 		{
-			name:                "Name and value with special characters",
-			envVarValue:         "tempfile",
-			nameInput:           "special_key!@#$",
-			valueInput:          "special_value%^&*",
-			expectedReturn:      true,
-			expectedFileContent: "special_key!@#$=special_value%^&*\n",
+			name: "Name and value with special characters",
+			setup: func(t *testing.T) (string, bool) {
+				f, err := os.CreateTemp("", "github_output_test")
+				if err != nil {
+					t.Fatalf("CreateTemp: %v", err)
+				}
+				path := f.Name()
+				_ = f.Close()
+
+				t.Cleanup(func() { _ = os.Remove(path) })
+				t.Setenv("GITHUB_OUTPUT", path)
+				return path, true
+			},
+			write: func(t *testing.T) {
+				got := WriteToGitHubOutput("special_key!@#$", "special_value%^&*")
+				if got != true {
+					t.Fatalf("expected true, got %v", got)
+				}
+			},
+			wantReturn:   true,
+			wantFile:     true,
+			wantFileBody: "special_key!@#$=special_value%^&*\n",
 		},
 		{
-			name:                "Value contains newline (unsupported scenario)",
-			envVarValue:         "tempfile",
-			nameInput:           "key",
-			valueInput:          "value\nwithnewline",
-			expectedReturn:      true,
-			expectedFileContent: "key=value\nwithnewline\n",
+			name: "Value contains newline (unsupported scenario)",
+			setup: func(t *testing.T) (string, bool) {
+				f, err := os.CreateTemp("", "github_output_test")
+				if err != nil {
+					t.Fatalf("CreateTemp: %v", err)
+				}
+				path := f.Name()
+				_ = f.Close()
+
+				t.Cleanup(func() { _ = os.Remove(path) })
+				t.Setenv("GITHUB_OUTPUT", path)
+				return path, true
+			},
+			write: func(t *testing.T) {
+				got := WriteToGitHubOutput("key", "value\nwithnewline")
+				if got != true {
+					t.Fatalf("expected true, got %v", got)
+				}
+			},
+			wantReturn:   true,
+			wantFile:     true,
+			wantFileBody: "key=value\nwithnewline\n",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Prepare the environment
-			if tt.envVarValue != "" {
-				if tt.envVarValue == "tempfile" {
-					// Create a temporary file to act as GITHUB_OUTPUT
-					tempFile, err := os.CreateTemp("", "github_output_test")
-					if err != nil {
-						t.Fatalf("Failed to create temporary file: %v", err)
-					}
+			path, verify := tt.setup(t)
 
-					if err := tempFile.Close(); err != nil {
-						t.Fatalf("Failed to close temp file: %v", err)
-					}
+			tt.write(t)
 
-					defer func() {
-						// cleanup
-						if err := os.Remove(tempFile.Name()); err != nil {
-							log.Printf("Failed to remove tempfile (%s): %v", tempFile.Name(), err)
-						}
-					}()
+			if !verify {
+				// nothing to verify on disk for "unset" or invalid path cases
+				return
+			}
 
-					err = os.Setenv("GITHUB_OUTPUT", tempFile.Name())
-					if err != nil {
-						log.Printf("Failed to set GITHUB_OUTPUT to %s: %v", tempFile.Name(), err)
-					}
-
-					defer func() {
-						// cleanup
-						if err := os.Unsetenv("GITHUB_OUTPUT"); err != nil {
-							log.Printf("Failed to unset GITHUB_OUTPUT: %v", err)
-						}
-					}()
-
-					if tt.name == "Write multiple times, data should append" {
-						// First write
-						result := WriteToGitHubOutput("key1", "value1")
-						if result != true {
-							t.Errorf("Expected WriteToGitHubOutput to return true, got %v", result)
-						}
-						// Second write
-						result = WriteToGitHubOutput("key2", "value2")
-						if result != true {
-							t.Errorf("Expected WriteToGitHubOutput to return true, got %v", result)
-						}
-					} else {
-						// Single write
-						result := WriteToGitHubOutput(tt.nameInput, tt.valueInput)
-						if result != tt.expectedReturn {
-							t.Errorf("Expected WriteToGitHubOutput to return %v, got %v", tt.expectedReturn, result)
-						}
-					}
-
-					// Verify file content
-					contentBytes, err := os.ReadFile(tempFile.Name())
-					if err != nil {
-						t.Fatalf("Failed to read temporary file: %v", err)
-					}
-					content := string(contentBytes)
-					if content != tt.expectedFileContent {
-						t.Errorf("File content mismatch.\nExpected:\n%q\nGot:\n%q", tt.expectedFileContent, content)
-					}
-				} else {
-					// GITHUB_OUTPUT is set to an invalid path
-					err := os.Setenv("GITHUB_OUTPUT", tt.envVarValue)
-					if err != nil {
-						log.Printf("Failed to set GITHUB_OUTPUT to %s: %v", tt.envVarValue, err)
-					}
-
-					defer func() {
-						// cleanup
-						if err := os.Unsetenv("GITHUB_OUTPUT"); err != nil {
-							log.Printf("Failed to unset GITHUB_OUTPUT: %v", err)
-						}
-					}()
-
-					result := WriteToGitHubOutput(tt.nameInput, tt.valueInput)
-					if result != tt.expectedReturn {
-						t.Errorf("Expected WriteToGitHubOutput to return %v, got %v", tt.expectedReturn, result)
-					}
-
-					// Ensure that the file does not exist
-					_, err = os.Stat(tt.envVarValue)
-					if !os.IsNotExist(err) {
-						t.Errorf("Expected file %v to not exist, but it does", tt.envVarValue)
-					}
-				}
-			} else {
-				// GITHUB_OUTPUT is not set
-				defer func() {
-					// cleanup
-					if err := os.Unsetenv("GITHUB_OUTPUT"); err != nil {
-						log.Printf("Failed to unset GITHUB_OUTPUT: %v", err)
-					}
-				}()
-				result := WriteToGitHubOutput(tt.nameInput, tt.valueInput)
-				if result != tt.expectedReturn {
-					t.Errorf("Expected WriteToGitHubOutput to return %v, got %v", tt.expectedReturn, result)
-				}
+			b, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("ReadFile(%s): %v", path, err)
+			}
+			if string(b) != tt.wantFileBody {
+				t.Fatalf("file content mismatch.\nwant:\n%q\ngot:\n%q", tt.wantFileBody, string(b))
 			}
 		})
 	}
