@@ -374,6 +374,197 @@ func TestParseRepoRelativePathsEnv(t *testing.T) {
 	})
 }
 
+func TestParseObject_JSON(t *testing.T) {
+	raw := `
+{
+  "indentation": "2sp",
+  "replace_breaks": false,
+  "include_tags": ["custom-1","custom-2"],
+  "nested": {"a": 1}
+}
+`
+
+	got, err := ParseObject(raw)
+	if err != nil {
+		t.Fatalf("ParseObject(JSON) returned error: %v", err)
+	}
+
+	want := map[string]any{
+		"indentation":    "2sp",
+		"replace_breaks": false,
+		"include_tags":   []any{"custom-1", "custom-2"},
+		"nested":         map[string]any{"a": float64(1)}, // JSON numbers -> float64
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ParseObject(JSON) mismatch.\n got: %#v\nwant: %#v", got, want)
+	}
+}
+
+func TestParseObject_YAML(t *testing.T) {
+	raw := `
+indentation: 2sp
+replace_breaks: false
+include_tags:
+  - custom-1
+  - custom-2
+nested:
+  a: 1
+`
+
+	got, err := ParseObject(raw)
+	if err != nil {
+		t.Fatalf("ParseObject(YAML) returned error: %v", err)
+	}
+
+	// YAML numbers usually decode into int, not float64 (depends on lib),
+	// so keep expected as int to match go.yaml.in/yaml/v4 typical behavior.
+	want := map[string]any{
+		"indentation":    "2sp",
+		"replace_breaks": false,
+		"include_tags":   []any{"custom-1", "custom-2"},
+		"nested":         map[string]any{"a": 1},
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ParseObject(YAML) mismatch.\n got: %#v\nwant: %#v", got, want)
+	}
+}
+
+func TestParseObject_Empty_ReturnsEmptyMap(t *testing.T) {
+	got, err := ParseObject("   \n\t  ")
+	if err != nil {
+		t.Fatalf("ParseObject(empty) returned error: %v", err)
+	}
+	if got == nil {
+		t.Fatalf("ParseObject(empty) returned nil map, want empty map")
+	}
+	if len(got) != 0 {
+		t.Fatalf("ParseObject(empty) len=%d, want 0. map=%#v", len(got), got)
+	}
+}
+
+func TestParseObject_InvalidCases(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+	}{
+		{"Invalid JSON", `{"indentation":"2sp",`},
+		{"Invalid YAML", "indentation: \"2sp\n"},
+		{"YAML Not a Mapping", "- a\n- b\n"},
+		// JSON "null" is valid JSON but invalid for our object-only rule.
+		{"JSON Null", "null"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParseObject(tt.raw)
+			if err == nil {
+				t.Fatalf("ParseObject(%s) expected error, got nil", tt.name)
+			}
+		})
+	}
+}
+
+func TestParseAdditionalParamsAndMerge_JSON_Overrides(t *testing.T) {
+	type Params map[string]any
+
+	dst := Params{
+		"format":             "json",
+		"original_filenames": true,
+		"include_tags":       []any{"default-tag"},
+	}
+
+	raw := `
+{
+  "include_tags": ["custom-1","custom-2"],
+  "indentation": "2sp",
+  "replace_breaks": false
+}
+`
+
+	err := ParseAdditionalParamsAndMerge(dst, raw)
+	if err != nil {
+		t.Fatalf("ParseAdditionalParamsAndMerge(JSON) error: %v", err)
+	}
+
+	want := Params{
+		"format":             "json",
+		"original_filenames": true,
+		"include_tags":       []any{"custom-1", "custom-2"}, // overridden
+		"indentation":        "2sp",
+		"replace_breaks":     false,
+	}
+
+	if !reflect.DeepEqual(dst, want) {
+		t.Fatalf("merge mismatch.\n got: %#v\nwant: %#v", dst, want)
+	}
+}
+
+func TestParseAdditionalParamsAndMerge_YAML_Overrides(t *testing.T) {
+	type Params map[string]any
+
+	dst := Params{
+		"format":       "yaml",
+		"include_tags": []any{"default-tag"},
+	}
+
+	raw := `
+include_tags:
+  - custom-1
+  - custom-2
+indentation: 2sp
+replace_breaks: false
+`
+
+	err := ParseAdditionalParamsAndMerge(dst, raw)
+	if err != nil {
+		t.Fatalf("ParseAdditionalParamsAndMerge(YAML) error: %v", err)
+	}
+
+	want := Params{
+		"format":         "yaml",
+		"include_tags":   []any{"custom-1", "custom-2"},
+		"indentation":    "2sp",
+		"replace_breaks": false,
+	}
+
+	if !reflect.DeepEqual(dst, want) {
+		t.Fatalf("merge mismatch.\n got: %#v\nwant: %#v", dst, want)
+	}
+}
+
+func TestParseAdditionalParamsAndMerge_Empty_NoChanges(t *testing.T) {
+	type Params map[string]any
+
+	dst := Params{
+		"format": "json",
+	}
+
+	err := ParseAdditionalParamsAndMerge(dst, " \n\t ")
+	if err != nil {
+		t.Fatalf("ParseAdditionalParamsAndMerge(empty) error: %v", err)
+	}
+
+	want := Params{"format": "json"}
+	if !reflect.DeepEqual(dst, want) {
+		t.Fatalf("expected no changes.\n got: %#v\nwant: %#v", dst, want)
+	}
+}
+
+func TestParseAdditionalParamsAndMerge_Invalid_ReturnsError(t *testing.T) {
+	type Params map[string]any
+
+	dst := Params{
+		"format": "json",
+	}
+
+	err := ParseAdditionalParamsAndMerge(dst, `{"indentation":"2sp",`)
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+}
+
 func normalizeSlice(s []string) []string {
 	if s == nil {
 		return []string{}

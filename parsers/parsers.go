@@ -2,11 +2,15 @@ package parsers
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	yaml "go.yaml.in/yaml/v4"
 )
 
 // ParseStringArrayEnv parses a string environment variable into an array of strings.
@@ -148,4 +152,59 @@ func ParseUintEnv(envVar string, defaultVal int) int {
 		return defaultVal
 	}
 	return val
+}
+
+// ParseAdditionalParamsAndMerge parses raw (JSON object or YAML mapping) and copies keys into dst.
+// Caller-specified values override existing keys in dst.
+func ParseAdditionalParamsAndMerge[M ~map[string]any](dst M, raw string) error {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+
+	add, err := ParseObject(raw)
+	if err != nil {
+		return err
+	}
+	maps.Copy(dst, add)
+	return nil
+}
+
+// ParseObject parses JSON object or YAML mapping into map[string]any.
+// Detection: leading "{" => JSON, otherwise YAML.
+func ParseObject(raw string) (map[string]any, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return map[string]any{}, nil
+	}
+	if strings.HasPrefix(raw, "{") {
+		return parseJSONMap(raw)
+	}
+	return parseYAMLMap(raw)
+}
+
+// parseYAMLMap parses a YAML mapping into map[string]any.
+func parseYAMLMap(s string) (map[string]any, error) {
+	var m map[string]any
+	err := yaml.Unmarshal([]byte(s), &m)
+	if err != nil {
+		return nil, err
+	}
+	if m == nil {
+		return nil, fmt.Errorf("YAML must be a mapping (key: value)")
+	}
+	return m, nil
+}
+
+// parseJSONMap parses a JSON object string into map[string]any.
+// Validation: we only accept objects; arrays/primitives are rejected by unmarshal error.
+func parseJSONMap(s string) (map[string]any, error) {
+	var m map[string]any
+	if err := json.Unmarshal([]byte(s), &m); err != nil {
+		return nil, err
+	}
+	if m == nil {
+		return nil, fmt.Errorf("JSON must be an object (not null)")
+	}
+	return m, nil
 }
