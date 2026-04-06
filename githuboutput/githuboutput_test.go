@@ -9,31 +9,26 @@ import (
 func TestWriteToGitHubOutput(t *testing.T) {
 	tests := []struct {
 		name         string
-		setup        func(t *testing.T) (outputPath string, verify bool)
-		write        func(t *testing.T)
-		wantReturn   bool
-		wantFile     bool
+		setupEnv     func(t *testing.T) string
+		outputName   string
+		outputValue  string
+		wantOK       bool
 		wantFileBody string
 	}{
 		{
 			name: "GITHUB_OUTPUT not set",
-			setup: func(t *testing.T) (string, bool) {
-				// Ensure truly unset even on GitHub runner
+			setupEnv: func(t *testing.T) string {
 				_ = os.Unsetenv("GITHUB_OUTPUT")
-				return "", false
+				return ""
 			},
-			write: func(t *testing.T) {
-				got := WriteToGitHubOutput("key", "value")
-				if got != false {
-					t.Fatalf("expected false, got %v", got)
-				}
-			},
-			wantReturn: false,
-			wantFile:   false,
+			outputName:   "key",
+			outputValue:  "value",
+			wantOK:       false,
+			wantFileBody: "",
 		},
 		{
 			name: "GITHUB_OUTPUT set, write succeeds",
-			setup: func(t *testing.T) (string, bool) {
+			setupEnv: func(t *testing.T) string {
 				f, err := os.CreateTemp("", "github_output_test")
 				if err != nil {
 					t.Fatalf("CreateTemp: %v", err)
@@ -43,39 +38,28 @@ func TestWriteToGitHubOutput(t *testing.T) {
 
 				t.Cleanup(func() { _ = os.Remove(path) })
 				t.Setenv("GITHUB_OUTPUT", path)
-				return path, true
+				return path
 			},
-			write: func(t *testing.T) {
-				got := WriteToGitHubOutput("key", "value")
-				if got != true {
-					t.Fatalf("expected true, got %v", got)
-				}
-			},
-			wantReturn:   true,
-			wantFile:     true,
+			outputName:   "key",
+			outputValue:  "value",
+			wantOK:       true,
 			wantFileBody: "key=value\n",
 		},
 		{
 			name: "GITHUB_OUTPUT set to invalid path",
-			setup: func(t *testing.T) (string, bool) {
-				// Use a path that should be invalid on all OSes:
-				// a file inside a non-existent directory.
+			setupEnv: func(t *testing.T) string {
 				p := filepath.Join(os.TempDir(), "definitely-not-exist-12345", "out.txt")
 				t.Setenv("GITHUB_OUTPUT", p)
-				return p, false
+				return ""
 			},
-			write: func(t *testing.T) {
-				got := WriteToGitHubOutput("key", "value")
-				if got != false {
-					t.Fatalf("expected false, got %v", got)
-				}
-			},
-			wantReturn: false,
-			wantFile:   false,
+			outputName:   "key",
+			outputValue:  "value",
+			wantOK:       false,
+			wantFileBody: "",
 		},
 		{
-			name: "Write multiple times, data should append",
-			setup: func(t *testing.T) (string, bool) {
+			name: "Write multiple times appends",
+			setupEnv: func(t *testing.T) string {
 				f, err := os.CreateTemp("", "github_output_test")
 				if err != nil {
 					t.Fatalf("CreateTemp: %v", err)
@@ -85,23 +69,20 @@ func TestWriteToGitHubOutput(t *testing.T) {
 
 				t.Cleanup(func() { _ = os.Remove(path) })
 				t.Setenv("GITHUB_OUTPUT", path)
-				return path, true
-			},
-			write: func(t *testing.T) {
-				if got := WriteToGitHubOutput("key1", "value1"); got != true {
-					t.Fatalf("first write: expected true, got %v", got)
+
+				if got := WriteToGitHubOutput("key1", "value1"); !got {
+					t.Fatalf("first write failed")
 				}
-				if got := WriteToGitHubOutput("key2", "value2"); got != true {
-					t.Fatalf("second write: expected true, got %v", got)
-				}
+				return path
 			},
-			wantReturn:   true,
-			wantFile:     true,
+			outputName:   "key2",
+			outputValue:  "value2",
+			wantOK:       true,
 			wantFileBody: "key1=value1\nkey2=value2\n",
 		},
 		{
-			name: "Empty name and value",
-			setup: func(t *testing.T) (string, bool) {
+			name: "Empty name is rejected",
+			setupEnv: func(t *testing.T) string {
 				f, err := os.CreateTemp("", "github_output_test")
 				if err != nil {
 					t.Fatalf("CreateTemp: %v", err)
@@ -111,21 +92,16 @@ func TestWriteToGitHubOutput(t *testing.T) {
 
 				t.Cleanup(func() { _ = os.Remove(path) })
 				t.Setenv("GITHUB_OUTPUT", path)
-				return path, true
+				return path
 			},
-			write: func(t *testing.T) {
-				got := WriteToGitHubOutput("", "")
-				if got != true {
-					t.Fatalf("expected true, got %v", got)
-				}
-			},
-			wantReturn:   true,
-			wantFile:     true,
-			wantFileBody: "=\n",
+			outputName:   "",
+			outputValue:  "value",
+			wantOK:       false,
+			wantFileBody: "",
 		},
 		{
-			name: "Name and value with special characters",
-			setup: func(t *testing.T) (string, bool) {
+			name: "Whitespace-only name is rejected",
+			setupEnv: func(t *testing.T) string {
 				f, err := os.CreateTemp("", "github_output_test")
 				if err != nil {
 					t.Fatalf("CreateTemp: %v", err)
@@ -135,21 +111,73 @@ func TestWriteToGitHubOutput(t *testing.T) {
 
 				t.Cleanup(func() { _ = os.Remove(path) })
 				t.Setenv("GITHUB_OUTPUT", path)
-				return path, true
+				return path
 			},
-			write: func(t *testing.T) {
-				got := WriteToGitHubOutput("special_key!@#$", "special_value%^&*")
-				if got != true {
-					t.Fatalf("expected true, got %v", got)
+			outputName:   "   \t  ",
+			outputValue:  "value",
+			wantOK:       false,
+			wantFileBody: "",
+		},
+		{
+			name: "Trimmed name is accepted",
+			setupEnv: func(t *testing.T) string {
+				f, err := os.CreateTemp("", "github_output_test")
+				if err != nil {
+					t.Fatalf("CreateTemp: %v", err)
 				}
+				path := f.Name()
+				_ = f.Close()
+
+				t.Cleanup(func() { _ = os.Remove(path) })
+				t.Setenv("GITHUB_OUTPUT", path)
+				return path
 			},
-			wantReturn:   true,
-			wantFile:     true,
+			outputName:   "  key  ",
+			outputValue:  "value",
+			wantOK:       true,
+			wantFileBody: "key=value\n",
+		},
+		{
+			name: "Empty value is allowed",
+			setupEnv: func(t *testing.T) string {
+				f, err := os.CreateTemp("", "github_output_test")
+				if err != nil {
+					t.Fatalf("CreateTemp: %v", err)
+				}
+				path := f.Name()
+				_ = f.Close()
+
+				t.Cleanup(func() { _ = os.Remove(path) })
+				t.Setenv("GITHUB_OUTPUT", path)
+				return path
+			},
+			outputName:   "key",
+			outputValue:  "",
+			wantOK:       true,
+			wantFileBody: "key=\n",
+		},
+		{
+			name: "Name with special characters is allowed",
+			setupEnv: func(t *testing.T) string {
+				f, err := os.CreateTemp("", "github_output_test")
+				if err != nil {
+					t.Fatalf("CreateTemp: %v", err)
+				}
+				path := f.Name()
+				_ = f.Close()
+
+				t.Cleanup(func() { _ = os.Remove(path) })
+				t.Setenv("GITHUB_OUTPUT", path)
+				return path
+			},
+			outputName:   "special_key!@#$",
+			outputValue:  "special_value%^&*",
+			wantOK:       true,
 			wantFileBody: "special_key!@#$=special_value%^&*\n",
 		},
 		{
-			name: "Value contains newline (unsupported scenario)",
-			setup: func(t *testing.T) (string, bool) {
+			name: "Name containing equals is rejected",
+			setupEnv: func(t *testing.T) string {
 				f, err := os.CreateTemp("", "github_output_test")
 				if err != nil {
 					t.Fatalf("CreateTemp: %v", err)
@@ -159,28 +187,82 @@ func TestWriteToGitHubOutput(t *testing.T) {
 
 				t.Cleanup(func() { _ = os.Remove(path) })
 				t.Setenv("GITHUB_OUTPUT", path)
-				return path, true
+				return path
 			},
-			write: func(t *testing.T) {
-				got := WriteToGitHubOutput("key", "value\nwithnewline")
-				if got != true {
-					t.Fatalf("expected true, got %v", got)
+			outputName:   "bad=key",
+			outputValue:  "value",
+			wantOK:       false,
+			wantFileBody: "",
+		},
+		{
+			name: "Name containing newline is rejected",
+			setupEnv: func(t *testing.T) string {
+				f, err := os.CreateTemp("", "github_output_test")
+				if err != nil {
+					t.Fatalf("CreateTemp: %v", err)
 				}
+				path := f.Name()
+				_ = f.Close()
+
+				t.Cleanup(func() { _ = os.Remove(path) })
+				t.Setenv("GITHUB_OUTPUT", path)
+				return path
 			},
-			wantReturn:   true,
-			wantFile:     true,
-			wantFileBody: "key=value\nwithnewline\n",
+			outputName:   "bad\nkey",
+			outputValue:  "value",
+			wantOK:       false,
+			wantFileBody: "",
+		},
+		{
+			name: "Value containing newline is rejected",
+			setupEnv: func(t *testing.T) string {
+				f, err := os.CreateTemp("", "github_output_test")
+				if err != nil {
+					t.Fatalf("CreateTemp: %v", err)
+				}
+				path := f.Name()
+				_ = f.Close()
+
+				t.Cleanup(func() { _ = os.Remove(path) })
+				t.Setenv("GITHUB_OUTPUT", path)
+				return path
+			},
+			outputName:   "key",
+			outputValue:  "value\nwithnewline",
+			wantOK:       false,
+			wantFileBody: "",
+		},
+		{
+			name: "Value containing carriage return is rejected",
+			setupEnv: func(t *testing.T) string {
+				f, err := os.CreateTemp("", "github_output_test")
+				if err != nil {
+					t.Fatalf("CreateTemp: %v", err)
+				}
+				path := f.Name()
+				_ = f.Close()
+
+				t.Cleanup(func() { _ = os.Remove(path) })
+				t.Setenv("GITHUB_OUTPUT", path)
+				return path
+			},
+			outputName:   "key",
+			outputValue:  "value\rbroken",
+			wantOK:       false,
+			wantFileBody: "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			path, verify := tt.setup(t)
+			path := tt.setupEnv(t)
 
-			tt.write(t)
+			got := WriteToGitHubOutput(tt.outputName, tt.outputValue)
+			if got != tt.wantOK {
+				t.Fatalf("WriteToGitHubOutput(%q, %q) = %v, want %v", tt.outputName, tt.outputValue, got, tt.wantOK)
+			}
 
-			if !verify {
-				// nothing to verify on disk for "unset" or invalid path cases
+			if path == "" {
 				return
 			}
 

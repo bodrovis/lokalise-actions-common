@@ -1,8 +1,6 @@
 package parsers
 
 import (
-	"log"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -35,6 +33,18 @@ func TestParseStringArrayEnv(t *testing.T) {
 			expected: []string{"/path/to/dir", "/another/path", "/yet/another/path"},
 		},
 		{
+			name:     "Classic Mac newlines (CR only)",
+			envKey:   "TEST_ENV",
+			envValue: "a\rb\rc",
+			expected: []string{"a", "b", "c"},
+		},
+		{
+			name:     "Mixed newline styles and trimming",
+			envKey:   "TEST_ENV",
+			envValue: " a \r\nb\r c \n\n",
+			expected: []string{"a", "b", "c"},
+		},
+		{
 			name:     "Empty lines and whitespace",
 			envKey:   "TEST_ENV",
 			envValue: "/path/to/dir\n\n \n/another/path\n   \n/yet/another/path\n",
@@ -47,7 +57,7 @@ func TestParseStringArrayEnv(t *testing.T) {
 			expected: []string{},
 		},
 		{
-			name:     "Empty string input",
+			name:     "Empty variable",
 			envKey:   "TEST_ENV",
 			envValue: "",
 			expected: []string{},
@@ -68,21 +78,11 @@ func TestParseStringArrayEnv(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := os.Setenv(tt.envKey, tt.envValue)
-			if err != nil {
-				log.Printf("Failed to set ENV %s -> %s: %v", tt.envKey, tt.envValue, err)
-			}
-
-			defer func() {
-				// cleanup
-				if err := os.Unsetenv(tt.envKey); err != nil {
-					log.Printf("Failed to unset %s: %v", tt.envKey, err)
-				}
-			}()
+			t.Setenv(tt.envKey, tt.envValue)
 
 			result := ParseStringArrayEnv(tt.envKey)
-			if !reflect.DeepEqual(normalizeSlice(result), normalizeSlice(tt.expected)) {
-				t.Errorf("ParseStringArrayEnv(%q) = %v, want %v", tt.envKey, result, tt.expected)
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Fatalf("ParseStringArrayEnv(%q) = %v, want %v", tt.envKey, result, tt.expected)
 			}
 		})
 	}
@@ -104,46 +104,37 @@ func TestParseBoolEnv(t *testing.T) {
 		{"Invalid value", "INVALID_ENV", "invalid", false, true},
 		{"Numeric true (1)", "NUMERIC_TRUE_ENV", "1", true, false},
 		{"Numeric false (0)", "NUMERIC_FALSE_ENV", "0", false, false},
+		{"Trimmed true value", "TRIMMED_TRUE_ENV", "  true \n", true, false},
+		{"Trimmed false value", "TRIMMED_FALSE_ENV", "\t false  ", false, false},
+		{"Whitespace around invalid value", "TRIMMED_INVALID_ENV", "  nope  ", false, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set the environment variable for the test
-			if tt.envValue != "" {
-				err := os.Setenv(tt.envKey, tt.envValue)
-				if err != nil {
-					log.Printf("Failed to set %s to %s: %v", tt.envKey, tt.envValue, err)
-				}
+			t.Setenv(tt.envKey, tt.envValue)
 
-				defer func() {
-					// cleanup
-					if err := os.Unsetenv(tt.envKey); err != nil {
-						log.Printf("Failed to unset %s: %v", tt.envKey, err)
-					}
-				}()
-			} else {
-				defer func() {
-					// cleanup
-					if err := os.Unsetenv(tt.envKey); err != nil {
-						log.Printf("Failed to unset %s: %v", tt.envKey, err)
-					}
-				}()
-			}
-
-			// Call the function
 			result, err := ParseBoolEnv(tt.envKey)
 
-			// Check for errors
 			if (err != nil) != tt.wantErr {
-				t.Errorf("ParseBoolEnv(%q) error = %v, wantErr = %v", tt.envKey, err, tt.wantErr)
-				return
+				t.Fatalf("ParseBoolEnv(%q) error = %v, wantErr = %v", tt.envKey, err, tt.wantErr)
 			}
 
-			// Check the result
 			if result != tt.expected {
-				t.Errorf("ParseBoolEnv(%q) = %v, want %v", tt.envKey, result, tt.expected)
+				t.Fatalf("ParseBoolEnv(%q) = %v, want %v", tt.envKey, result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestParseBoolEnv_UnsetVariable(t *testing.T) {
+	key := "SOME_UNSET_ENV_FOR_TEST"
+
+	result, err := ParseBoolEnv(key)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != false {
+		t.Fatalf("got %v, want false", result)
 	}
 }
 
@@ -164,38 +155,20 @@ func TestParseUintEnv(t *testing.T) {
 		{"Whitespace input", "WHITESPACE_ENV", "   ", 25, 25},
 		{"Very large value", "LARGE_ENV", "99999", 1, 99999},
 		{"Boundary value (1)", "BOUNDARY_ENV", "1", 10, 1},
+		{"Trimmed valid integer", "TRIMMED_VALID_ENV", "  42 \n", 10, 42},
+		{"Trimmed zero value", "TRIMMED_ZERO_ENV", "  0  ", 10, 10},
+		{"Trimmed negative value", "TRIMMED_NEGATIVE_ENV", "  -7 ", 15, 15},
+		{"Trimmed invalid value", "TRIMMED_INVALID_ENV", "\t abc \n", 20, 20},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set up the environment variable
-			if tt.envValue != "" {
-				err := os.Setenv(tt.envKey, tt.envValue)
-				if err != nil {
-					log.Printf("Failed to set %s to %s: %v", tt.envKey, tt.envValue, err)
-				}
+			t.Setenv(tt.envKey, tt.envValue)
 
-				defer func() {
-					// cleanup
-					if err := os.Unsetenv(tt.envKey); err != nil {
-						log.Printf("Failed to unset %s: %v", tt.envKey, err)
-					}
-				}()
-			} else {
-				defer func() {
-					// cleanup
-					if err := os.Unsetenv(tt.envKey); err != nil {
-						log.Printf("Failed to unset %s: %v", tt.envKey, err)
-					}
-				}()
-			}
-
-			// Call the function
 			result := ParseUintEnv(tt.envKey, tt.defaultVal)
 
-			// Validate the result
 			if result != tt.expected {
-				t.Errorf("ParseUintEnv(%q, %d) = %d, want %d", tt.envKey, tt.defaultVal, result, tt.expected)
+				t.Fatalf("ParseUintEnv(%q, %d) = %d, want %d", tt.envKey, tt.defaultVal, result, tt.expected)
 			}
 		})
 	}
@@ -227,7 +200,7 @@ func TestEnsureRepoRelativePath(t *testing.T) {
 			want: "x",
 		},
 		{
-			name: "dot path is forbidden",
+			name: "dot path is allowed as repo root",
 			in:   ".",
 			want: ".",
 		},
@@ -245,6 +218,31 @@ func TestEnsureRepoRelativePath(t *testing.T) {
 			name:        "parent escape after clean a/../../b",
 			in:          "a/../../b",
 			expectError: "escapes repo root",
+		},
+		{
+			name:        "empty path forbidden",
+			in:          "",
+			expectError: "empty path",
+		},
+		{
+			name:        "whitespace-only path forbidden",
+			in:          "   \t  ",
+			expectError: "empty path",
+		},
+		{
+			name:        "tilde path forbidden",
+			in:          "~/.config",
+			expectError: "no ~ expansion",
+		},
+		{
+			name:        "tilde-user path forbidden",
+			in:          "~john/file",
+			expectError: "no ~ expansion",
+		},
+		{
+			name:        "NUL byte forbidden",
+			in:          "abc\x00def",
+			expectError: "contains NUL",
 		},
 		{
 			name:        "UNC-like path forbidden",
@@ -299,6 +297,18 @@ func TestParseRepoRelativePathsEnv(t *testing.T) {
 	for _, k := range allKeys {
 		t.Setenv(k, "")
 	}
+
+	t.Run("repo root dot path is allowed", func(t *testing.T) {
+		t.Setenv("TEST_PATHS", ".")
+		got, err := ParseRepoRelativePathsEnv("TEST_PATHS")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		want := []string{"."}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	})
 
 	t.Run("valid multiple, normalize and dedupe order-preserving", func(t *testing.T) {
 		// ./x, x/, x  -> "x"; a//b/../c -> a/c
@@ -454,6 +464,10 @@ func TestParseObject_InvalidCases(t *testing.T) {
 		{"YAML Not a Mapping", "- a\n- b\n"},
 		// JSON "null" is valid JSON but invalid for our object-only rule.
 		{"JSON Null", "null"},
+		{"JSON Array", `["a","b"]`},
+		{"JSON Number", `123`},
+		{"YAML Null", `null`},
+		{"YAML Scalar", `hello`},
 	}
 
 	for _, tt := range tests {
@@ -534,6 +548,16 @@ replace_breaks: false
 	}
 }
 
+func TestParseAdditionalParamsAndMerge_NilDst(t *testing.T) {
+	type Params map[string]any
+	var dst Params
+
+	err := ParseAdditionalParamsAndMerge(dst, `{"a":1}`)
+	if err == nil || !strings.Contains(err.Error(), "must not be nil") {
+		t.Fatalf("expected nil-dst error, got %v", err)
+	}
+}
+
 func TestParseAdditionalParamsAndMerge_Empty_NoChanges(t *testing.T) {
 	type Params map[string]any
 
@@ -563,11 +587,4 @@ func TestParseAdditionalParamsAndMerge_Invalid_ReturnsError(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
-}
-
-func normalizeSlice(s []string) []string {
-	if s == nil {
-		return []string{}
-	}
-	return s
 }

@@ -1,7 +1,6 @@
 package parsers
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -21,15 +20,14 @@ func ParseStringArrayEnv(envVar string) []string {
 		return []string{}
 	}
 
-	// Normalize line endings to Unix-style
 	val = strings.ReplaceAll(val, "\r\n", "\n")
 	val = strings.ReplaceAll(val, "\r", "\n")
 
-	scanner := bufio.NewScanner(strings.NewReader(val))
-	var result []string
+	lines := strings.Split(val, "\n")
+	result := make([]string, 0, len(lines))
 
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
 		if line != "" {
 			result = append(result, line)
 		}
@@ -91,7 +89,7 @@ func EnsureRepoRelativePath(p string) (string, error) {
 	}
 
 	if strings.ContainsAny(s, `*?[]`) {
-		return "", fmt.Errorf("invalid path %q in TRANSLATIONS_PATH: glob characters are not allowed", p)
+		return "", fmt.Errorf("invalid path %q: glob characters are not allowed", p)
 	}
 
 	return clean, nil
@@ -100,7 +98,7 @@ func EnsureRepoRelativePath(p string) (string, error) {
 // ParseRepoRelativePathsEnv reads an env var as multiline list (using ParseStringArrayEnv),
 // validates each item with EnsureRepoRelativePath, normalizes to forward slashes,
 // deduplicates (order-preserving), and returns the set.
-// Returns an error if the env var is empty or all entries are invalid.
+// Returns an error if the env var is empty or any entry is invalid.
 func ParseRepoRelativePathsEnv(envVar string) ([]string, error) {
 	raw := ParseStringArrayEnv(envVar)
 	if len(raw) == 0 {
@@ -133,17 +131,18 @@ func ParseRepoRelativePathsEnv(envVar string) ([]string, error) {
 // Returns false if the variable is not set or empty.
 // Returns an error if the value cannot be parsed as a boolean.
 func ParseBoolEnv(envVar string) (bool, error) {
-	val := os.Getenv(envVar)
+	val := strings.TrimSpace(os.Getenv(envVar))
 	if val == "" {
 		return false, nil
 	}
+
 	return strconv.ParseBool(val)
 }
 
 // ParseUintEnv retrieves an environment variable as a positive integer.
 // Returns the default value if the variable is not set, invalid, or less than 1.
 func ParseUintEnv(envVar string, defaultVal int) int {
-	valStr := os.Getenv(envVar)
+	valStr := strings.TrimSpace(os.Getenv(envVar))
 	if valStr == "" {
 		return defaultVal
 	}
@@ -157,6 +156,10 @@ func ParseUintEnv(envVar string, defaultVal int) int {
 // ParseAdditionalParamsAndMerge parses raw (JSON object or YAML mapping) and copies keys into dst.
 // Caller-specified values override existing keys in dst.
 func ParseAdditionalParamsAndMerge[M ~map[string]any](dst M, raw string) error {
+	if dst == nil {
+		return fmt.Errorf("destination map must not be nil")
+	}
+
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil
