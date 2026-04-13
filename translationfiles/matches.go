@@ -5,6 +5,14 @@ import (
 	"strings"
 )
 
+type Config struct {
+	TranslationPaths []string
+	FileExt          []string
+	FlatNaming       bool
+	AlwaysPullBase   bool
+	BaseLang         string
+}
+
 func Matches(cfg Config, path string) bool {
 	path = strings.TrimSpace(path)
 	if path == "" {
@@ -98,4 +106,10 @@ func relativePathWithinRoot(root, path string) (string, bool) {
 	}
 
 	return rel, true
+}
+
+func normalizeExt(ext string) string {
+	ext = strings.ToLower(strings.TrimSpace(ext))
+	ext = strings.TrimPrefix(ext, ".")
+	return ext
 }
