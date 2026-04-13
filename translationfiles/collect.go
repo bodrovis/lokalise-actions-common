@@ -24,13 +24,7 @@ func Collect(cfg Config) ([]string, error) {
 		return nil, err
 	}
 
-	allowedExts := make(map[string]struct{}, len(cfg.FileExt))
-	for _, ext := range cfg.FileExt {
-		e := normalizeExt(ext)
-		if e != "" {
-			allowedExts[e] = struct{}{}
-		}
-	}
+	allowedExts := buildAllowedExts(cfg.FileExt)
 
 	seen := make(map[string]struct{})
 	files := make([]string, 0)
