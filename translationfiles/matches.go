@@ -24,55 +24,89 @@ func Matches(cfg Config, path string) bool {
 		return false
 	}
 
-	cleanPath := filepath.Clean(path)
-	ext := normalizeExt(filepath.Ext(cleanPath))
-	if ext == "" {
-		return false
-	}
-	if _, ok := allowedExts[ext]; !ok {
+	cleanPath, ext, ok := matchesAllowedExtension(path, allowedExts)
+	if !ok {
 		return false
 	}
 
+	return matchesAnyTranslationRoot(cfg, cleanPath, ext)
+}
+
+func matchesAllowedExtension(path string, allowedExts map[string]struct{}) (string, string, bool) {
+	cleanPath := filepath.Clean(strings.TrimSpace(path))
+	ext := normalizeExt(filepath.Ext(cleanPath))
+	if ext == "" {
+		return "", "", false
+	}
+
+	if _, ok := allowedExts[ext]; !ok {
+		return "", "", false
+	}
+
+	return cleanPath, ext, true
+}
+
+func matchesAnyTranslationRoot(cfg Config, cleanPath, ext string) bool {
 	baseName := filepath.Base(cleanPath)
 
 	for _, rawRoot := range cfg.TranslationPaths {
-		root := strings.TrimSpace(rawRoot)
-		if root == "" {
-			continue
+		if matchesTranslationRoot(cfg, rawRoot, cleanPath, baseName, ext) {
+			return true
 		}
-
-		rel, ok := relativePathWithinRoot(root, cleanPath)
-		if !ok {
-			continue
-		}
-
-		relSlash := filepath.ToSlash(rel)
-		if relSlash == "." || relSlash == "" {
-			continue
-		}
-
-		if cfg.FlatNaming {
-			// only direct children of the translation root are allowed
-			if strings.Contains(relSlash, "/") {
-				continue
-			}
-
-			if !cfg.AlwaysPullBase && baseName == cfg.BaseLang+"."+ext {
-				continue
-			}
-		} else {
-			if !cfg.AlwaysPullBase {
-				parts := strings.Split(relSlash, "/")
-				if len(parts) > 0 && parts[0] == cfg.BaseLang {
-					continue
-				}
-			}
-		}
-
-		return true
 	}
 
 	return false
+}
+
+func matchesTranslationRoot(cfg Config, rawRoot, cleanPath, baseName, ext string) bool {
+	root := strings.TrimSpace(rawRoot)
+	if root == "" {
+		return false
+	}
+
+	rel, ok := relativePathWithinRoot(root, cleanPath)
+	if !ok {
+		return false
+	}
+
+	relSlash := filepath.ToSlash(rel)
+
+	// Skip the translation root itself; only files under the root are eligible.
+	if relSlash == "." {
+		return false
+	}
+
+	if cfg.FlatNaming {
+		return matchesFlatNaming(relSlash, baseName, cfg.BaseLang, ext, cfg.AlwaysPullBase)
+	}
+
+	return matchesNestedNaming(relSlash, cfg.BaseLang, cfg.AlwaysPullBase)
+}
+
+func matchesFlatNaming(relSlash, baseName, baseLang, ext string, alwaysPullBase bool) bool {
+	// In flat mode, only direct children of the translation root are allowed.
+	if strings.Contains(relSlash, "/") {
+		return false
+	}
+
+	if !alwaysPullBase && baseName == baseLang+"."+ext {
+		return false
+	}
+
+	return true
+}
+
+func matchesNestedNaming(relSlash, baseLang string, alwaysPullBase bool) bool {
+	if alwaysPullBase {
+		return true
+	}
+
+	parts := strings.Split(relSlash, "/")
+	if len(parts) > 0 && parts[0] == baseLang {
+		return false
+	}
+
+	return true
 }
 
 func buildAllowedExts(fileExt []string) map[string]struct{} {

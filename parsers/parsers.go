@@ -75,7 +75,7 @@ func EnsureRepoRelativePath(p string) (string, error) {
 
 	s := filepath.ToSlash(clean)
 
-	if strings.HasPrefix(s, "/") || strings.HasPrefix(s, "//") {
+	if strings.HasPrefix(s, "/") {
 		return "", fmt.Errorf("path must be relative to repo: %q", p)
 	}
 

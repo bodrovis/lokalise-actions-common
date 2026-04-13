@@ -1,0 +1,9 @@
+.qlty/
+
+coverage.out
+
+.DS_Store
+
+.cache
+
+.env

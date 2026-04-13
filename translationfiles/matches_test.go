@@ -25,6 +25,18 @@ func TestMatches(t *testing.T) {
 			want: false,
 		},
 		{
+			name: "path equal to translation root with valid extension does not match",
+			cfg: Config{
+				TranslationPaths: []string{"locales.strings"},
+				FileExt:          []string{"strings"},
+				FlatNaming:       true,
+				AlwaysPullBase:   false,
+				BaseLang:         "en",
+			},
+			path: "locales.strings",
+			want: false,
+		},
+		{
 			name: "no allowed extensions",
 			cfg: Config{
 				TranslationPaths: []string{"locales"},
