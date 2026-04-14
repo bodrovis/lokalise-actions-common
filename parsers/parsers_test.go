@@ -195,6 +195,11 @@ func TestEnsureRepoRelativePath(t *testing.T) {
 			want: "a/c",
 		},
 		{
+			name: "trims surrounding whitespace",
+			in:   "  ./a/b  ",
+			want: "a/b",
+		},
+		{
 			name: "trims trailing slash",
 			in:   "x/",
 			want: "x",
@@ -382,6 +387,128 @@ func TestParseRepoRelativePathsEnv(t *testing.T) {
 			t.Fatalf("expected drive-prefixed error, got %v", err)
 		}
 	})
+}
+
+func TestEnsureRepoRelativePattern(t *testing.T) {
+	type tc struct {
+		name        string
+		in          string
+		want        string
+		expectError string
+	}
+
+	absPath, _ := filepath.Abs("some/abs/path")
+
+	cases := []tc{
+		{
+			name: "simple relative path",
+			in:   "a/b",
+			want: "a/b",
+		},
+		{
+			name: "glob pattern is allowed",
+			in:   "locales/**/*.yaml",
+			want: "locales/**/*.yaml",
+		},
+		{
+			name: "question-mark glob is allowed",
+			in:   "foo?.yml",
+			want: "foo?.yml",
+		},
+		{
+			name: "character class glob is allowed",
+			in:   "bar[0-9].json",
+			want: "bar[0-9].json",
+		},
+		{
+			name: "normalizes path-like input",
+			in:   "./a//b/../c",
+			want: "a/c",
+		},
+		{
+			name: "trims surrounding whitespace",
+			in:   "  ./a/b  ",
+			want: "a/b",
+		},
+		{
+			name: "dot path is allowed as repo root",
+			in:   ".",
+			want: ".",
+		},
+		{
+			name:        "absolute path is forbidden",
+			in:          absPath,
+			expectError: "path must be relative to repo",
+		},
+		{
+			name:        "parent escape is forbidden",
+			in:          "../outside",
+			expectError: "escapes repo root",
+		},
+		{
+			name:        "parent escape after clean is forbidden",
+			in:          "a/../../b",
+			expectError: "escapes repo root",
+		},
+		{
+			name:        "pattern escaping repo root is forbidden",
+			in:          "a/../../*.yml",
+			expectError: "escapes repo root",
+		},
+		{
+			name:        "empty path forbidden",
+			in:          "",
+			expectError: "empty path",
+		},
+		{
+			name:        "whitespace-only path forbidden",
+			in:          "   \t  ",
+			expectError: "empty path",
+		},
+		{
+			name:        "tilde path forbidden",
+			in:          "~/.config",
+			expectError: "no ~ expansion",
+		},
+		{
+			name:        "tilde-user path forbidden",
+			in:          "~john/file",
+			expectError: "no ~ expansion",
+		},
+		{
+			name:        "NUL byte forbidden",
+			in:          "abc\x00def",
+			expectError: "contains NUL",
+		},
+		{
+			name:        "UNC-like path forbidden",
+			in:          "//server/share",
+			expectError: "path must be relative to repo",
+		},
+		{
+			name:        "drive-prefixed relative forbidden",
+			in:          "C:foo",
+			expectError: "drive-prefixed",
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := EnsureRepoRelativePattern(tt.in)
+			if tt.expectError != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.expectError) {
+					t.Fatalf("expected error containing %q, got %v", tt.expectError, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if filepath.ToSlash(got) != tt.want {
+				t.Fatalf("got %q, want %q", filepath.ToSlash(got), tt.want)
+			}
+		})
+	}
 }
 
 func TestParseObject_JSON(t *testing.T) {
@@ -586,5 +713,87 @@ func TestParseAdditionalParamsAndMerge_Invalid_ReturnsError(t *testing.T) {
 	err := ParseAdditionalParamsAndMerge(dst, `{"indentation":"2sp",`)
 	if err == nil {
 		t.Fatalf("expected error, got nil")
+	}
+}
+
+func TestNormalizeFileExtensions(t *testing.T) {
+	type tc struct {
+		name        string
+		in          []string
+		want        []string
+		expectError string
+	}
+
+	cases := []tc{
+		{
+			name: "single extension",
+			in:   []string{"json"},
+			want: []string{"json"},
+		},
+		{
+			name: "trims whitespace removes leading dot and lowercases",
+			in:   []string{" .JSON "},
+			want: []string{"json"},
+		},
+		{
+			name: "multiple extensions preserve first-seen order",
+			in:   []string{"yaml", "json", "xml"},
+			want: []string{"yaml", "json", "xml"},
+		},
+		{
+			name: "deduplicates after normalization",
+			in:   []string{".JSON", " json ", "Json", ".yaml", "YAML"},
+			want: []string{"json", "yaml"},
+		},
+		{
+			name: "skips empty values after normalization",
+			in:   []string{"", "   ", ".", ".json", " yml "},
+			want: []string{"json", "yml"},
+		},
+		{
+			name:        "leading dot only becomes empty and is skipped",
+			in:          []string{"."},
+			expectError: "no valid file extensions after normalization",
+		},
+		{
+			name:        "all values empty after normalization",
+			in:          []string{"", "   ", ".", " . "},
+			expectError: "no valid file extensions after normalization",
+		},
+		{
+			name:        "empty input slice returns error",
+			in:          []string{},
+			expectError: "cannot infer file extension",
+		},
+		{
+			name: "does not remove internal dots",
+			in:   []string{"tar.gz", ".svg"},
+			want: []string{"tar.gz", "svg"},
+		},
+		{
+			name: "preserves first normalized occurrence",
+			in:   []string{" .YML ", "json", "yml", ".JSON"},
+			want: []string{"yml", "json"},
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NormalizeFileExtensions(tt.in)
+			if tt.expectError != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.expectError) {
+					t.Fatalf("expected error containing %q, got %v", tt.expectError, err)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("got %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

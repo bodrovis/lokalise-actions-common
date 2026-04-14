@@ -36,21 +36,22 @@ func ParseStringArrayEnv(envVar string) []string {
 	return result
 }
 
-// EnsureRepoRelativePath validates a single path is repo-relative and safe.
+// EnsureRepoRelativePattern validates a single repo-relative path or pattern.
 // Allowed:
 //   - "." => repo root
 //   - relative subdirs/files like "locales", "packages/app/locales", "./locales"
+//   - repo-relative glob patterns like "**/*.yaml", "locales/**/en.json"
 //
 // Forbidden:
 //   - empty/whitespace
 //   - absolute (POSIX, Windows drive, UNC)
 //   - parent escapes ("..", "../")
 //   - drive-relative like "C:foo"
-//   - glob metachars: * ? [ ]
 //   - tilde-expansion "~", "~user"
+//   - NUL byte
 //
-// Returns a cleaned path (OS-native separators). Caller may ToSlash it.
-func EnsureRepoRelativePath(p string) (string, error) {
+// Returns a cleaned path/pattern (OS-native separators). Caller may ToSlash it.
+func EnsureRepoRelativePattern(p string) (string, error) {
 	p = strings.TrimSpace(p)
 	if p == "" {
 		return "", fmt.Errorf("empty path")
@@ -88,6 +89,18 @@ func EnsureRepoRelativePath(p string) (string, error) {
 		return "", fmt.Errorf("path must be relative (drive-prefixed): %q", p)
 	}
 
+	return clean, nil
+}
+
+// EnsureRepoRelativePath validates a single path is repo-relative and safe.
+// Same rules as EnsureRepoRelativePattern, but glob metacharacters are forbidden.
+func EnsureRepoRelativePath(p string) (string, error) {
+	clean, err := EnsureRepoRelativePattern(p)
+	if err != nil {
+		return "", err
+	}
+
+	s := filepath.ToSlash(clean)
 	if strings.ContainsAny(s, `*?[]`) {
 		return "", fmt.Errorf("invalid path %q: glob characters are not allowed", p)
 	}
@@ -210,4 +223,51 @@ func parseJSONMap(s string) (map[string]any, error) {
 		return nil, fmt.Errorf("JSON must be an object (not null)")
 	}
 	return m, nil
+}
+
+// NormalizeFileExtensions normalizes a list of file extensions.
+//
+// Behavior:
+//   - trims surrounding whitespace
+//   - removes a leading dot (".json" -> "json")
+//   - lowercases all values
+//   - removes duplicates while preserving order
+//   - skips empty values after normalization
+//
+// Errors:
+//   - returns an error if input slice is empty
+//   - returns an error if no valid extensions remain after normalization
+//
+// Example:
+//
+//	input:  []string{".JSON", " yaml ", "json", ""}
+//	output: []string{"json", "yaml"}
+func NormalizeFileExtensions(exts []string) ([]string, error) {
+	if len(exts) == 0 {
+		return nil, fmt.Errorf("cannot infer file extension: FILE_EXT is empty")
+	}
+
+	seen := make(map[string]struct{}, len(exts))
+	out := make([]string, 0, len(exts))
+
+	for _, ext := range exts {
+		ext = strings.TrimSpace(ext)
+		ext = strings.TrimPrefix(ext, ".")
+		ext = strings.ToLower(ext)
+
+		if ext == "" {
+			continue
+		}
+		if _, ok := seen[ext]; ok {
+			continue
+		}
+		seen[ext] = struct{}{}
+		out = append(out, ext)
+	}
+
+	if len(out) == 0 {
+		return nil, fmt.Errorf("no valid file extensions after normalization")
+	}
+
+	return out, nil
 }
