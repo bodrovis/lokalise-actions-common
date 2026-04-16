@@ -1,6 +1,7 @@
 package parsers
 
 import (
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -713,5 +714,160 @@ func TestParseAdditionalParamsAndMerge_Invalid_ReturnsError(t *testing.T) {
 	err := ParseAdditionalParamsAndMerge(dst, `{"indentation":"2sp",`)
 	if err == nil {
 		t.Fatalf("expected error, got nil")
+	}
+}
+
+func TestParseLang(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		envVar  string
+		raw     string
+		want    string
+		wantErr string
+	}{
+		{
+			name:   "simple lang",
+			envVar: "BASE_LANG",
+			raw:    "en",
+			want:   "en",
+		},
+		{
+			name:   "lang with underscore",
+			envVar: "BASE_LANG",
+			raw:    "fr_FR",
+			want:   "fr_FR",
+		},
+		{
+			name:   "lang with surrounding spaces",
+			envVar: "BASE_LANG",
+			raw:    "  en  ",
+			want:   "en",
+		},
+		{
+			name:   "lang with dash",
+			envVar: "BASE_LANG",
+			raw:    "pt-BR",
+			want:   "pt-BR",
+		},
+		{
+			name:    "empty raw",
+			envVar:  "BASE_LANG",
+			raw:     "",
+			wantErr: "BASE_LANG environment variable is not set or empty",
+		},
+		{
+			name:    "whitespace only",
+			envVar:  "BASE_LANG",
+			raw:     "   ",
+			wantErr: "BASE_LANG environment variable is not set or empty",
+		},
+		{
+			name:    "contains forward slash",
+			envVar:  "BASE_LANG",
+			raw:     "foo/bar",
+			wantErr: "BASE_LANG must not contain path separators",
+		},
+		{
+			name:    "contains backslash",
+			envVar:  "BASE_LANG",
+			raw:     `foo\bar`,
+			wantErr: "BASE_LANG must not contain path separators",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := ParseLang(tt.envVar, tt.raw)
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("unexpected lang: got %q want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseLangEnv(t *testing.T) {
+	tests := []struct {
+		name    string
+		envVar  string
+		envVal  *string
+		want    string
+		wantErr string
+	}{
+		{
+			name:   "reads valid env var",
+			envVar: "BASE_LANG",
+			envVal: new("en"),
+			want:   "en",
+		},
+		{
+			name:   "reads and trims env var",
+			envVar: "BASE_LANG",
+			envVal: new("  fr_FR  "),
+			want:   "fr_FR",
+		},
+		{
+			name:    "env var unset",
+			envVar:  "BASE_LANG",
+			envVal:  nil,
+			wantErr: "BASE_LANG environment variable is not set or empty",
+		},
+		{
+			name:    "env var empty",
+			envVar:  "BASE_LANG",
+			envVal:  new(""),
+			wantErr: "BASE_LANG environment variable is not set or empty",
+		},
+		{
+			name:    "env var invalid path separator",
+			envVar:  "BASE_LANG",
+			envVal:  new("foo/bar"),
+			wantErr: "BASE_LANG must not contain path separators",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv(tt.envVar, "")
+			os.Unsetenv(tt.envVar)
+
+			if tt.envVal != nil {
+				t.Setenv(tt.envVar, *tt.envVal)
+			}
+
+			got, err := ParseLangEnv(tt.envVar)
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("unexpected lang: got %q want %q", got, tt.want)
+			}
+		})
 	}
 }

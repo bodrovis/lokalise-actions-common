@@ -166,6 +166,28 @@ func ParseUintEnv(envVar string, defaultVal int) int {
 	return val
 }
 
+// ParseLangEnv read and validates lang value from
+// env variable.
+func ParseLangEnv(envVar string) (string, error) {
+	rawLang := os.Getenv(envVar)
+
+	return ParseLang(envVar, rawLang)
+}
+
+// ParseLang validates the language identifier used for file or
+// directory matching.
+func ParseLang(envVar, raw string) (string, error) {
+	lang := strings.TrimSpace(raw)
+	if lang == "" {
+		return "", fmt.Errorf("%s environment variable is not set or empty", envVar)
+	}
+	if strings.ContainsAny(lang, `/\`) {
+		return "", fmt.Errorf("%s must not contain path separators", envVar)
+	}
+
+	return lang, nil
+}
+
 // ParseAdditionalParamsAndMerge parses raw (JSON object or YAML mapping) and copies keys into dst.
 // Caller-specified values override existing keys in dst.
 func ParseAdditionalParamsAndMerge[M ~map[string]any](dst M, raw string) error {
