@@ -142,13 +142,18 @@ func TestNormalizeFileExtensions(t *testing.T) {
 		},
 		{
 			name: "skips empty values after normalization",
-			in:   []string{"", "   ", ".", ".json", " yml "},
+			in:   []string{"", "   ", ".", "..json", " yml "},
 			want: []string{"json", "yml"},
 		},
 		{
 			name:        "leading dot only becomes empty and is skipped",
 			in:          []string{"."},
 			expectError: "no valid file extensions after normalization",
+		},
+		{
+			name:        "errors when extensions have slashes",
+			in:          []string{".jso/n"},
+			expectError: "invalid file extension",
 		},
 		{
 			name:        "all values empty after normalization",
@@ -158,7 +163,7 @@ func TestNormalizeFileExtensions(t *testing.T) {
 		{
 			name:        "empty input slice returns error",
 			in:          []string{},
-			expectError: "cannot infer file extension",
+			expectError: "no file extensions provided",
 		},
 		{
 			name: "does not remove internal dots",

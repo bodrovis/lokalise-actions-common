@@ -43,23 +43,29 @@ func NormalizeOptionalNamePattern(pattern string) (string, error) {
 //	output: []string{"json", "yaml"}
 func NormalizeFileExtensions(exts []string) ([]string, error) {
 	if len(exts) == 0 {
-		return nil, fmt.Errorf("cannot infer file extension: FILE_EXT is empty")
+		return nil, fmt.Errorf("no file extensions provided")
 	}
 
 	seen := make(map[string]struct{}, len(exts))
 	out := make([]string, 0, len(exts))
 
-	for _, ext := range exts {
-		ext = strings.TrimSpace(ext)
-		ext = strings.TrimPrefix(ext, ".")
+	for _, raw := range exts {
+		ext := strings.TrimSpace(raw)
+		ext = strings.TrimLeft(ext, ".")
 		ext = strings.ToLower(ext)
 
 		if ext == "" {
 			continue
 		}
+
+		if strings.ContainsAny(ext, `/\`) {
+			return nil, fmt.Errorf("invalid file extension %q", raw)
+		}
+
 		if _, ok := seen[ext]; ok {
 			continue
 		}
+
 		seen[ext] = struct{}{}
 		out = append(out, ext)
 	}
