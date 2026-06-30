@@ -55,7 +55,7 @@ func TestTranslationScope_ToTranslationFilesConfig(t *testing.T) {
 
 	scope := TranslationScope{
 		Paths:          []string{"locales", "pkg/locales"},
-		FileExt:        []string{"strings", "stringsdict"},
+		FileExts:       []string{"strings", "stringsdict"},
 		FlatNaming:     false,
 		AlwaysPullBase: true,
 		BaseLang:       "en",
@@ -66,8 +66,8 @@ func TestTranslationScope_ToTranslationFilesConfig(t *testing.T) {
 	if !reflect.DeepEqual(got.TranslationPaths, scope.Paths) {
 		t.Fatalf("TranslationPaths = %#v, want %#v", got.TranslationPaths, scope.Paths)
 	}
-	if !reflect.DeepEqual(got.FileExt, scope.FileExt) {
-		t.Fatalf("FileExt = %#v, want %#v", got.FileExt, scope.FileExt)
+	if !reflect.DeepEqual(got.FileExts, scope.FileExts) {
+		t.Fatalf("FileExts = %#v, want %#v", got.FileExts, scope.FileExts)
 	}
 	if got.FlatNaming != scope.FlatNaming {
 		t.Fatalf("FlatNaming = %v, want %v", got.FlatNaming, scope.FlatNaming)
@@ -93,7 +93,7 @@ func TestFilterManaged(t *testing.T) {
 			name: "flat direct child matches and sorts deduplicated",
 			scope: TranslationScope{
 				Paths:          []string{"locales"},
-				FileExt:        []string{"strings"},
+				FileExts:       []string{"strings"},
 				FlatNaming:     true,
 				AlwaysPullBase: false,
 				BaseLang:       "en",
@@ -114,7 +114,7 @@ func TestFilterManaged(t *testing.T) {
 			name: "flat excludes nested child",
 			scope: TranslationScope{
 				Paths:          []string{"locales"},
-				FileExt:        []string{"strings"},
+				FileExts:       []string{"strings"},
 				FlatNaming:     true,
 				AlwaysPullBase: false,
 				BaseLang:       "en",
@@ -131,7 +131,7 @@ func TestFilterManaged(t *testing.T) {
 			name: "flat excludes base language when always pull base false",
 			scope: TranslationScope{
 				Paths:          []string{"locales"},
-				FileExt:        []string{"strings", "stringsdict"},
+				FileExts:       []string{"strings", "stringsdict"},
 				FlatNaming:     true,
 				AlwaysPullBase: false,
 				BaseLang:       "en",
@@ -151,7 +151,7 @@ func TestFilterManaged(t *testing.T) {
 			name: "flat includes base language when always pull base true",
 			scope: TranslationScope{
 				Paths:          []string{"locales"},
-				FileExt:        []string{"strings"},
+				FileExts:       []string{"strings"},
 				FlatNaming:     true,
 				AlwaysPullBase: true,
 				BaseLang:       "en",
@@ -169,7 +169,7 @@ func TestFilterManaged(t *testing.T) {
 			name: "nested excludes base language subtree",
 			scope: TranslationScope{
 				Paths:          []string{"locales"},
-				FileExt:        []string{"strings", "stringsdict"},
+				FileExts:       []string{"strings", "stringsdict"},
 				FlatNaming:     false,
 				AlwaysPullBase: false,
 				BaseLang:       "en",
@@ -189,7 +189,7 @@ func TestFilterManaged(t *testing.T) {
 			name: "nested includes base language subtree when always pull base true",
 			scope: TranslationScope{
 				Paths:          []string{"locales"},
-				FileExt:        []string{"strings"},
+				FileExts:       []string{"strings"},
 				FlatNaming:     false,
 				AlwaysPullBase: true,
 				BaseLang:       "en",
@@ -210,7 +210,7 @@ func TestFilterManaged(t *testing.T) {
 					p("path", "to", "package", "localizables"),
 					p("path", "to", "app", "supporting-files"),
 				},
-				FileExt:        []string{"strings", "stringsdict"},
+				FileExts:       []string{"strings", "stringsdict"},
 				FlatNaming:     true,
 				AlwaysPullBase: false,
 				BaseLang:       "en",
@@ -230,7 +230,7 @@ func TestFilterManaged(t *testing.T) {
 			name: "outside similar prefix root is ignored",
 			scope: TranslationScope{
 				Paths:          []string{p("path", "to", "app")},
-				FileExt:        []string{"strings"},
+				FileExts:       []string{"strings"},
 				FlatNaming:     true,
 				AlwaysPullBase: false,
 				BaseLang:       "en",
@@ -247,7 +247,7 @@ func TestFilterManaged(t *testing.T) {
 			name: "deleted style path still matches because filesystem is not consulted",
 			scope: TranslationScope{
 				Paths:          []string{"locales"},
-				FileExt:        []string{"strings"},
+				FileExts:       []string{"strings"},
 				FlatNaming:     false,
 				AlwaysPullBase: false,
 				BaseLang:       "en",
@@ -263,7 +263,7 @@ func TestFilterManaged(t *testing.T) {
 			name: "unsupported extension is ignored",
 			scope: TranslationScope{
 				Paths:          []string{"locales"},
-				FileExt:        []string{"strings"},
+				FileExts:       []string{"strings"},
 				FlatNaming:     false,
 				AlwaysPullBase: false,
 				BaseLang:       "en",
@@ -468,7 +468,7 @@ func TestCollectManagedGitPaths(t *testing.T) {
 					p("path", "to", "package", "localizables"),
 					p("path", "to", "app", "supporting-files"),
 				},
-				FileExt:        []string{"strings", "stringsdict"},
+				FileExts:       []string{"strings", "stringsdict"},
 				FlatNaming:     true,
 				AlwaysPullBase: false,
 				BaseLang:       "en",
@@ -496,7 +496,7 @@ func TestCollectManagedGitPaths(t *testing.T) {
 			name: "includes untracked managed files",
 			scope: TranslationScope{
 				Paths:          []string{"locales"},
-				FileExt:        []string{"strings"},
+				FileExts:       []string{"strings"},
 				FlatNaming:     false,
 				AlwaysPullBase: false,
 				BaseLang:       "en",
@@ -519,7 +519,7 @@ func TestCollectManagedGitPaths(t *testing.T) {
 			name: "returns empty when no managed paths",
 			scope: TranslationScope{
 				Paths:          []string{"locales"},
-				FileExt:        []string{"strings"},
+				FileExts:       []string{"strings"},
 				FlatNaming:     true,
 				AlwaysPullBase: false,
 				BaseLang:       "en",
@@ -541,7 +541,7 @@ func TestCollectManagedGitPaths(t *testing.T) {
 			name: "propagates changed paths error",
 			scope: TranslationScope{
 				Paths:          []string{"locales"},
-				FileExt:        []string{"strings"},
+				FileExts:       []string{"strings"},
 				FlatNaming:     true,
 				AlwaysPullBase: false,
 				BaseLang:       "en",
@@ -561,7 +561,7 @@ func TestCollectManagedGitPaths(t *testing.T) {
 			name: "propagates untracked paths error",
 			scope: TranslationScope{
 				Paths:          []string{"locales"},
-				FileExt:        []string{"strings"},
+				FileExts:       []string{"strings"},
 				FlatNaming:     true,
 				AlwaysPullBase: false,
 				BaseLang:       "en",
@@ -611,7 +611,7 @@ func TestHasManagedGitPaths(t *testing.T) {
 			name: "true when managed paths exist",
 			scope: TranslationScope{
 				Paths:          []string{"locales"},
-				FileExt:        []string{"strings"},
+				FileExts:       []string{"strings"},
 				FlatNaming:     false,
 				AlwaysPullBase: false,
 				BaseLang:       "en",
@@ -629,7 +629,7 @@ func TestHasManagedGitPaths(t *testing.T) {
 			name: "false when no managed paths exist",
 			scope: TranslationScope{
 				Paths:          []string{"locales"},
-				FileExt:        []string{"strings"},
+				FileExts:       []string{"strings"},
 				FlatNaming:     true,
 				AlwaysPullBase: false,
 				BaseLang:       "en",
@@ -647,7 +647,7 @@ func TestHasManagedGitPaths(t *testing.T) {
 			name: "propagates errors",
 			scope: TranslationScope{
 				Paths:          []string{"locales"},
-				FileExt:        []string{"strings"},
+				FileExts:       []string{"strings"},
 				FlatNaming:     true,
 				AlwaysPullBase: false,
 				BaseLang:       "en",

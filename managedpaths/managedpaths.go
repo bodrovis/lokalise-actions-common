@@ -17,7 +17,7 @@ type CaptureRunner interface {
 // TranslationScope describes which translation files are managed by the action.
 type TranslationScope struct {
 	Paths          []string
-	FileExt        []string
+	FileExts       []string
 	FlatNaming     bool
 	AlwaysPullBase bool
 	BaseLang       string
@@ -27,7 +27,7 @@ type TranslationScope struct {
 func (s TranslationScope) ToTranslationFilesConfig() translationfiles.Config {
 	return translationfiles.Config{
 		TranslationPaths: s.Paths,
-		FileExt:          s.FileExt,
+		FileExts:         s.FileExts,
 		FlatNaming:       s.FlatNaming,
 		AlwaysPullBase:   s.AlwaysPullBase,
 		BaseLang:         s.BaseLang,

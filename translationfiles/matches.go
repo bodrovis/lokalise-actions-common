@@ -7,7 +7,7 @@ import (
 
 type Config struct {
 	TranslationPaths []string
-	FileExt          []string
+	FileExts         []string
 	FlatNaming       bool
 	AlwaysPullBase   bool
 	BaseLang         string
@@ -19,7 +19,7 @@ func Matches(cfg Config, path string) bool {
 		return false
 	}
 
-	allowedExts := buildAllowedExts(cfg.FileExt)
+	allowedExts := buildAllowedExts(cfg.FileExts)
 	if len(allowedExts) == 0 {
 		return false
 	}
@@ -109,10 +109,10 @@ func matchesNestedNaming(relSlash, baseLang string, alwaysPullBase bool) bool {
 	return true
 }
 
-func buildAllowedExts(fileExt []string) map[string]struct{} {
-	allowedExts := make(map[string]struct{}, len(fileExt))
+func buildAllowedExts(fileExts []string) map[string]struct{} {
+	allowedExts := make(map[string]struct{}, len(fileExts))
 
-	for _, ext := range fileExt {
+	for _, ext := range fileExts {
 		e := normalizeExt(ext)
 		if e == "" {
 			continue

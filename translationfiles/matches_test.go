@@ -16,7 +16,7 @@ func TestMatches(t *testing.T) {
 			name: "empty path",
 			cfg: Config{
 				TranslationPaths: []string{"locales"},
-				FileExt:          []string{"strings"},
+				FileExts:         []string{"strings"},
 				FlatNaming:       true,
 				AlwaysPullBase:   false,
 				BaseLang:         "en",
@@ -28,7 +28,7 @@ func TestMatches(t *testing.T) {
 			name: "path equal to translation root with valid extension does not match",
 			cfg: Config{
 				TranslationPaths: []string{"locales.strings"},
-				FileExt:          []string{"strings"},
+				FileExts:         []string{"strings"},
 				FlatNaming:       true,
 				AlwaysPullBase:   false,
 				BaseLang:         "en",
@@ -40,7 +40,7 @@ func TestMatches(t *testing.T) {
 			name: "no allowed extensions",
 			cfg: Config{
 				TranslationPaths: []string{"locales"},
-				FileExt:          []string{"", ".", "   "},
+				FileExts:         []string{"", ".", "   "},
 				FlatNaming:       true,
 				AlwaysPullBase:   false,
 				BaseLang:         "en",
@@ -52,7 +52,7 @@ func TestMatches(t *testing.T) {
 			name: "unsupported extension",
 			cfg: Config{
 				TranslationPaths: []string{"locales"},
-				FileExt:          []string{"strings"},
+				FileExts:         []string{"strings"},
 				FlatNaming:       true,
 				AlwaysPullBase:   false,
 				BaseLang:         "en",
@@ -64,7 +64,7 @@ func TestMatches(t *testing.T) {
 			name: "path outside translation root",
 			cfg: Config{
 				TranslationPaths: []string{"locales"},
-				FileExt:          []string{"strings"},
+				FileExts:         []string{"strings"},
 				FlatNaming:       true,
 				AlwaysPullBase:   false,
 				BaseLang:         "en",
@@ -76,7 +76,7 @@ func TestMatches(t *testing.T) {
 			name: "flat direct child matches",
 			cfg: Config{
 				TranslationPaths: []string{"locales"},
-				FileExt:          []string{"strings"},
+				FileExts:         []string{"strings"},
 				FlatNaming:       true,
 				AlwaysPullBase:   false,
 				BaseLang:         "en",
@@ -88,7 +88,7 @@ func TestMatches(t *testing.T) {
 			name: "flat nested child does not match",
 			cfg: Config{
 				TranslationPaths: []string{"locales"},
-				FileExt:          []string{"strings"},
+				FileExts:         []string{"strings"},
 				FlatNaming:       true,
 				AlwaysPullBase:   false,
 				BaseLang:         "en",
@@ -100,7 +100,7 @@ func TestMatches(t *testing.T) {
 			name: "flat excludes base language file",
 			cfg: Config{
 				TranslationPaths: []string{"locales"},
-				FileExt:          []string{"strings", "stringsdict"},
+				FileExts:         []string{"strings", "stringsdict"},
 				FlatNaming:       true,
 				AlwaysPullBase:   false,
 				BaseLang:         "en",
@@ -112,7 +112,7 @@ func TestMatches(t *testing.T) {
 			name: "flat includes base language file when always pull base",
 			cfg: Config{
 				TranslationPaths: []string{"locales"},
-				FileExt:          []string{"strings"},
+				FileExts:         []string{"strings"},
 				FlatNaming:       true,
 				AlwaysPullBase:   true,
 				BaseLang:         "en",
@@ -124,7 +124,7 @@ func TestMatches(t *testing.T) {
 			name: "flat second extension matches",
 			cfg: Config{
 				TranslationPaths: []string{"locales"},
-				FileExt:          []string{"strings", "stringsdict"},
+				FileExts:         []string{"strings", "stringsdict"},
 				FlatNaming:       true,
 				AlwaysPullBase:   false,
 				BaseLang:         "en",
@@ -136,7 +136,7 @@ func TestMatches(t *testing.T) {
 			name: "flat excludes base language for second extension",
 			cfg: Config{
 				TranslationPaths: []string{"locales"},
-				FileExt:          []string{"strings", "stringsdict"},
+				FileExts:         []string{"strings", "stringsdict"},
 				FlatNaming:       true,
 				AlwaysPullBase:   false,
 				BaseLang:         "en",
@@ -148,7 +148,7 @@ func TestMatches(t *testing.T) {
 			name: "nested file matches",
 			cfg: Config{
 				TranslationPaths: []string{"locales"},
-				FileExt:          []string{"strings"},
+				FileExts:         []string{"strings"},
 				FlatNaming:       false,
 				AlwaysPullBase:   false,
 				BaseLang:         "en",
@@ -160,7 +160,7 @@ func TestMatches(t *testing.T) {
 			name: "nested deeper file matches",
 			cfg: Config{
 				TranslationPaths: []string{"locales"},
-				FileExt:          []string{"strings"},
+				FileExts:         []string{"strings"},
 				FlatNaming:       false,
 				AlwaysPullBase:   false,
 				BaseLang:         "en",
@@ -172,7 +172,7 @@ func TestMatches(t *testing.T) {
 			name: "nested excludes base language directory",
 			cfg: Config{
 				TranslationPaths: []string{"locales"},
-				FileExt:          []string{"strings", "stringsdict"},
+				FileExts:         []string{"strings", "stringsdict"},
 				FlatNaming:       false,
 				AlwaysPullBase:   false,
 				BaseLang:         "en",
@@ -184,7 +184,7 @@ func TestMatches(t *testing.T) {
 			name: "nested excludes deeper file under base language directory",
 			cfg: Config{
 				TranslationPaths: []string{"locales"},
-				FileExt:          []string{"strings"},
+				FileExts:         []string{"strings"},
 				FlatNaming:       false,
 				AlwaysPullBase:   false,
 				BaseLang:         "en",
@@ -196,7 +196,7 @@ func TestMatches(t *testing.T) {
 			name: "nested includes base language directory when always pull base",
 			cfg: Config{
 				TranslationPaths: []string{"locales"},
-				FileExt:          []string{"strings"},
+				FileExts:         []string{"strings"},
 				FlatNaming:       false,
 				AlwaysPullBase:   true,
 				BaseLang:         "en",
@@ -211,7 +211,7 @@ func TestMatches(t *testing.T) {
 					filepath.Join("path", "to", "package", "localizables"),
 					filepath.Join("path", "to", "app", "supporting-files"),
 				},
-				FileExt:        []string{"strings", "stringsdict"},
+				FileExts:       []string{"strings", "stringsdict"},
 				FlatNaming:     true,
 				AlwaysPullBase: false,
 				BaseLang:       "en",
@@ -226,7 +226,7 @@ func TestMatches(t *testing.T) {
 					filepath.Join("path", "to", "package", "localizables"),
 					filepath.Join("path", "to", "app", "supporting-files"),
 				},
-				FileExt:        []string{"strings", "stringsdict"},
+				FileExts:       []string{"strings", "stringsdict"},
 				FlatNaming:     true,
 				AlwaysPullBase: false,
 				BaseLang:       "en",
@@ -241,7 +241,7 @@ func TestMatches(t *testing.T) {
 					filepath.Join("path", "to", "package", "localizables"),
 					filepath.Join("path", "to", "app", "supporting-files"),
 				},
-				FileExt:        []string{"strings", "stringsdict"},
+				FileExts:       []string{"strings", "stringsdict"},
 				FlatNaming:     true,
 				AlwaysPullBase: false,
 				BaseLang:       "en",
@@ -253,7 +253,7 @@ func TestMatches(t *testing.T) {
 			name: "deleted file style path still matches because filesystem is not consulted",
 			cfg: Config{
 				TranslationPaths: []string{"locales"},
-				FileExt:          []string{"strings"},
+				FileExts:         []string{"strings"},
 				FlatNaming:       false,
 				AlwaysPullBase:   false,
 				BaseLang:         "en",
@@ -265,7 +265,7 @@ func TestMatches(t *testing.T) {
 			name: "extension matching is case insensitive",
 			cfg: Config{
 				TranslationPaths: []string{"locales"},
-				FileExt:          []string{"STRINGS"},
+				FileExts:         []string{"STRINGS"},
 				FlatNaming:       false,
 				AlwaysPullBase:   false,
 				BaseLang:         "en",
@@ -277,7 +277,7 @@ func TestMatches(t *testing.T) {
 			name: "empty root entries are ignored",
 			cfg: Config{
 				TranslationPaths: []string{"", "locales"},
-				FileExt:          []string{"strings"},
+				FileExts:         []string{"strings"},
 				FlatNaming:       true,
 				AlwaysPullBase:   false,
 				BaseLang:         "en",
@@ -289,7 +289,7 @@ func TestMatches(t *testing.T) {
 			name: "path equal to root does not match",
 			cfg: Config{
 				TranslationPaths: []string{"locales"},
-				FileExt:          []string{"strings"},
+				FileExts:         []string{"strings"},
 				FlatNaming:       true,
 				AlwaysPullBase:   false,
 				BaseLang:         "en",
