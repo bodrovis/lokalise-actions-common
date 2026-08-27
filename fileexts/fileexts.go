@@ -12,20 +12,20 @@ import (
 // ResolveFromEnv returns normalized file extensions from FILE_EXT or,
 // if FILE_EXT is not provided, falls back to FILE_FORMAT.
 func ResolveFromEnv(fileExtEnv, fileFormatEnv string) ([]string, error) {
-	fileExts := parsers.ParseStringArrayEnv(fileExtEnv)
-	if len(fileExts) == 0 {
+	extensions := parsers.ParseStringArrayEnv(fileExtEnv)
+	if len(extensions) == 0 {
 		if inferred := strings.TrimSpace(os.Getenv(fileFormatEnv)); inferred != "" {
-			fileExts = []string{inferred}
+			extensions = []string{inferred}
 		}
 	}
 
-	if len(fileExts) == 0 {
+	if len(extensions) == 0 {
 		return nil, fmt.Errorf(
-			"cannot infer file extension. Make sure %s or %s environment variables are set",
+			"cannot infer file extension: make sure %s or %s environment variable is set",
 			fileExtEnv,
 			fileFormatEnv,
 		)
 	}
 
-	return normalizers.NormalizeFileExtensions(fileExts)
+	return normalizers.NormalizeFileExtensions(extensions)
 }

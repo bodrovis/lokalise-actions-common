@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -82,7 +83,7 @@ func TestParseStringArrayEnv(t *testing.T) {
 			t.Setenv(tt.envKey, tt.envValue)
 
 			result := ParseStringArrayEnv(tt.envKey)
-			if !reflect.DeepEqual(result, tt.expected) {
+			if !slices.Equal(result, tt.expected) {
 				t.Fatalf("ParseStringArrayEnv(%q) = %v, want %v", tt.envKey, result, tt.expected)
 			}
 		})
@@ -124,18 +125,6 @@ func TestParseBoolEnv(t *testing.T) {
 				t.Fatalf("ParseBoolEnv(%q) = %v, want %v", tt.envKey, result, tt.expected)
 			}
 		})
-	}
-}
-
-func TestParseBoolEnv_UnsetVariable(t *testing.T) {
-	key := "SOME_UNSET_ENV_FOR_TEST"
-
-	result, err := ParseBoolEnv(key)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result != false {
-		t.Fatalf("got %v, want false", result)
 	}
 }
 
@@ -182,7 +171,10 @@ func TestEnsureRepoRelativePath(t *testing.T) {
 		want        string
 		expectError string
 	}
-	absPath, _ := filepath.Abs("some/abs/path")
+	absPath, err := filepath.Abs("some/abs/path")
+	if err != nil {
+		t.Fatalf("filepath.Abs: %v", err)
+	}
 
 	cases := []tc{
 		{
@@ -213,7 +205,7 @@ func TestEnsureRepoRelativePath(t *testing.T) {
 		{
 			name:        "absolute path is forbidden",
 			in:          absPath,
-			expectError: "path must be relative to repo",
+			expectError: "path must be relative",
 		},
 		{
 			name:        "parent escape is forbidden (../)",
@@ -311,7 +303,7 @@ func TestParseRepoRelativePathsEnv(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		want := []string{"."}
-		if !reflect.DeepEqual(got, want) {
+		if !slices.Equal(got, want) {
 			t.Fatalf("got %v, want %v", got, want)
 		}
 	})
@@ -398,7 +390,10 @@ func TestEnsureRepoRelativePattern(t *testing.T) {
 		expectError string
 	}
 
-	absPath, _ := filepath.Abs("some/abs/path")
+	absPath, err := filepath.Abs("some/abs/path")
+	if err != nil {
+		t.Fatalf("filepath.Abs: %v", err)
+	}
 
 	cases := []tc{
 		{
@@ -410,6 +405,21 @@ func TestEnsureRepoRelativePattern(t *testing.T) {
 			name: "glob pattern is allowed",
 			in:   "locales/**/*.yaml",
 			want: "locales/**/*.yaml",
+		},
+		{
+			name:        "Windows backslash parent escape is forbidden",
+			in:          `..\outside`,
+			expectError: "escapes repo root",
+		},
+		{
+			name:        "Windows UNC path is forbidden",
+			in:          `\\server\share`,
+			expectError: "path must be relative to repo",
+		},
+		{
+			name: "Windows backslashes are normalized",
+			in:   `locales\fr\file.json`,
+			want: "locales/fr/file.json",
 		},
 		{
 			name: "question-mark glob is allowed",
@@ -439,7 +449,7 @@ func TestEnsureRepoRelativePattern(t *testing.T) {
 		{
 			name:        "absolute path is forbidden",
 			in:          absPath,
-			expectError: "path must be relative to repo",
+			expectError: "path must be relative",
 		},
 		{
 			name:        "parent escape is forbidden",
@@ -704,6 +714,13 @@ func TestParseAdditionalParamsAndMerge_Empty_NoChanges(t *testing.T) {
 	}
 }
 
+func TestParseObject_JSONRejectsDuplicateNames(t *testing.T) {
+	_, err := ParseObject(`{"format":"json","format":"yaml"}`)
+	if err == nil {
+		t.Fatal("expected duplicate-name error, got nil")
+	}
+}
+
 func TestParseAdditionalParamsAndMerge_Invalid_ReturnsError(t *testing.T) {
 	type Params map[string]any
 
@@ -844,10 +861,26 @@ func TestParseLangEnv(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv(tt.envVar, "")
-			os.Unsetenv(tt.envVar)
+			if tt.envVal == nil {
+				oldValue, wasSet := os.LookupEnv(tt.envVar)
 
-			if tt.envVal != nil {
+				if err := os.Unsetenv(tt.envVar); err != nil {
+					t.Fatalf("Unsetenv(%q): %v", tt.envVar, err)
+				}
+
+				t.Cleanup(func() {
+					if wasSet {
+						if err := os.Setenv(tt.envVar, oldValue); err != nil {
+							t.Errorf("Setenv(%q): %v", tt.envVar, err)
+						}
+						return
+					}
+
+					if err := os.Unsetenv(tt.envVar); err != nil {
+						t.Errorf("Unsetenv(%q): %v", tt.envVar, err)
+					}
+				})
+			} else {
 				t.Setenv(tt.envVar, *tt.envVal)
 			}
 

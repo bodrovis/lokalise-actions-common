@@ -49,6 +49,54 @@ func TestMatches(t *testing.T) {
 			want: false,
 		},
 		{
+			name: "compound extension matches",
+			cfg: Config{
+				TranslationPaths: []string{"locales"},
+				FileExts:         []string{"tar.gz"},
+				FlatNaming:       true,
+				AlwaysPullBase:   false,
+				BaseLang:         "en",
+			},
+			path: filepath.Join("locales", "fr.tar.gz"),
+			want: true,
+		},
+		{
+			name: "compound extension matching is case insensitive",
+			cfg: Config{
+				TranslationPaths: []string{"locales"},
+				FileExts:         []string{"tar.gz"},
+				FlatNaming:       true,
+				AlwaysPullBase:   false,
+				BaseLang:         "en",
+			},
+			path: filepath.Join("locales", "fr.TAR.GZ"),
+			want: true,
+		},
+		{
+			name: "flat base language exclusion ignores extension case",
+			cfg: Config{
+				TranslationPaths: []string{"locales"},
+				FileExts:         []string{"strings"},
+				FlatNaming:       true,
+				AlwaysPullBase:   false,
+				BaseLang:         "en",
+			},
+			path: filepath.Join("locales", "en.STRINGS"),
+			want: false,
+		},
+		{
+			name: "backslash-separated repo path matches on any OS",
+			cfg: Config{
+				TranslationPaths: []string{"locales"},
+				FileExts:         []string{"strings"},
+				FlatNaming:       false,
+				AlwaysPullBase:   false,
+				BaseLang:         "en",
+			},
+			path: `locales\fr\Localizable.strings`,
+			want: true,
+		},
+		{
 			name: "unsupported extension",
 			cfg: Config{
 				TranslationPaths: []string{"locales"},
@@ -338,6 +386,26 @@ func TestRelativePathWithinRoot(t *testing.T) {
 			wantOK: false,
 		},
 		{
+			name:    "backslash-separated path is normalized",
+			root:    "locales",
+			path:    `locales\fr\Localizable.strings`,
+			wantRel: filepath.Join("fr", "Localizable.strings"),
+			wantOK:  true,
+		},
+		{
+			name:    "backslash-separated root and path are normalized",
+			root:    `packages\app\locales`,
+			path:    `packages\app\locales\fr\file.json`,
+			wantRel: filepath.Join("fr", "file.json"),
+			wantOK:  true,
+		},
+		{
+			name:   "backslash-separated path outside root is rejected",
+			root:   `locales`,
+			path:   `other\fr.strings`,
+			wantOK: false,
+		},
+		{
 			name:    "root and path are cleaned",
 			root:    filepath.Join("locales", "."),
 			path:    filepath.Join("locales", "fr", "..", "fr", "Localizable.strings"),
@@ -367,7 +435,15 @@ func TestRelativePathWithinRoot(t *testing.T) {
 }
 
 func TestBuildAllowedExts(t *testing.T) {
-	got := buildAllowedExts([]string{"strings", ".stringsdict", " STRINGS ", "", ".", "   "})
+	got := buildAllowedExts([]string{
+		"strings",
+		".stringsdict",
+		" STRINGS ",
+		".tar.gz",
+		"",
+		".",
+		"   ",
+	})
 
 	if _, ok := got["strings"]; !ok {
 		t.Fatal(`buildAllowedExts() missing "strings"`)
@@ -375,7 +451,11 @@ func TestBuildAllowedExts(t *testing.T) {
 	if _, ok := got["stringsdict"]; !ok {
 		t.Fatal(`buildAllowedExts() missing "stringsdict"`)
 	}
-	if len(got) != 2 {
-		t.Fatalf("buildAllowedExts() len = %d, want 2", len(got))
+	if _, ok := got["tar.gz"]; !ok {
+		t.Fatal(`buildAllowedExts() missing "tar.gz"`)
+	}
+
+	if len(got) != 3 {
+		t.Fatalf("buildAllowedExts() len = %d, want 3", len(got))
 	}
 }

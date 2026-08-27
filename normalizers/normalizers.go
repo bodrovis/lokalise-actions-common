@@ -1,6 +1,7 @@
 package normalizers
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -43,7 +44,7 @@ func NormalizeOptionalNamePattern(pattern string) (string, error) {
 //	output: []string{"json", "yaml"}
 func NormalizeFileExtensions(exts []string) ([]string, error) {
 	if len(exts) == 0 {
-		return nil, fmt.Errorf("no file extensions provided")
+		return nil, errors.New("no file extensions provided")
 	}
 
 	seen := make(map[string]struct{}, len(exts))
@@ -51,7 +52,7 @@ func NormalizeFileExtensions(exts []string) ([]string, error) {
 
 	for _, raw := range exts {
 		ext := strings.TrimSpace(raw)
-		ext = strings.TrimLeft(ext, ".")
+		ext = strings.TrimPrefix(ext, ".")
 		ext = strings.ToLower(ext)
 
 		if ext == "" {
@@ -71,7 +72,7 @@ func NormalizeFileExtensions(exts []string) ([]string, error) {
 	}
 
 	if len(out) == 0 {
-		return nil, fmt.Errorf("no valid file extensions after normalization")
+		return nil, errors.New("no valid file extensions after normalization")
 	}
 
 	return out, nil

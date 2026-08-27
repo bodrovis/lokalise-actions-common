@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -35,7 +35,8 @@ func p(elem ...string) string {
 
 func assertEqualStrings(t *testing.T, got, want []string) {
 	t.Helper()
-	if !reflect.DeepEqual(got, want) {
+
+	if !slices.Equal(got, want) {
 		t.Fatalf("unexpected result:\n got: %#v\nwant: %#v", got, want)
 	}
 }
@@ -63,11 +64,20 @@ func TestTranslationScope_ToTranslationFilesConfig(t *testing.T) {
 
 	got := scope.ToTranslationFilesConfig()
 
-	if !reflect.DeepEqual(got.TranslationPaths, scope.Paths) {
-		t.Fatalf("TranslationPaths = %#v, want %#v", got.TranslationPaths, scope.Paths)
+	if !slices.Equal(got.TranslationPaths, scope.Paths) {
+		t.Fatalf(
+			"TranslationPaths = %#v, want %#v",
+			got.TranslationPaths,
+			scope.Paths,
+		)
 	}
-	if !reflect.DeepEqual(got.FileExts, scope.FileExts) {
-		t.Fatalf("FileExts = %#v, want %#v", got.FileExts, scope.FileExts)
+
+	if !slices.Equal(got.FileExts, scope.FileExts) {
+		t.Fatalf(
+			"FileExts = %#v, want %#v",
+			got.FileExts,
+			scope.FileExts,
+		)
 	}
 	if got.FlatNaming != scope.FlatNaming {
 		t.Fatalf("FlatNaming = %v, want %v", got.FlatNaming, scope.FlatNaming)
@@ -682,24 +692,6 @@ func TestHasManagedGitPaths(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestNormalize(t *testing.T) {
-	t.Parallel()
-
-	got := normalize([]string{
-		"  " + p("locales", "fr.strings") + "  ",
-		"",
-		"   ",
-		p("locales", "de.strings"),
-	})
-
-	want := []string{
-		p("locales", "fr.strings"),
-		p("locales", "de.strings"),
-	}
-
-	assertEqualStrings(t, got, want)
 }
 
 func TestMergeAndNormalize(t *testing.T) {

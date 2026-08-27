@@ -1,10 +1,12 @@
 package parsers
 
 import (
-	"encoding/json"
+	json "encoding/json/v2"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -20,13 +22,11 @@ func ParseStringArrayEnv(envVar string) []string {
 		return []string{}
 	}
 
-	val = strings.ReplaceAll(val, "\r\n", "\n")
-	val = strings.ReplaceAll(val, "\r", "\n")
+	result := []string{}
 
-	lines := strings.Split(val, "\n")
-	result := make([]string, 0, len(lines))
-
-	for _, line := range lines {
+	for line := range strings.FieldsFuncSeq(val, func(r rune) bool {
+		return r == '\n' || r == '\r'
+	}) {
 		line = strings.TrimSpace(line)
 		if line != "" {
 			result = append(result, line)
@@ -53,43 +53,57 @@ func ParseStringArrayEnv(envVar string) []string {
 // Returns a cleaned path/pattern (OS-native separators). Caller may ToSlash it.
 func EnsureRepoRelativePattern(p string) (string, error) {
 	p = strings.TrimSpace(p)
+
 	if p == "" {
-		return "", fmt.Errorf("empty path")
+		return "", errors.New("empty path")
 	}
 
 	if strings.ContainsRune(p, '\x00') {
-		return "", fmt.Errorf("invalid path: contains NUL")
+		return "", errors.New("invalid path: contains NUL")
 	}
+
 	if strings.HasPrefix(p, "~") {
-		return "", fmt.Errorf("path must be relative to repo (no ~ expansion): %q", p)
+		return "", fmt.Errorf(
+			"path must be relative to repo (no ~ expansion): %q",
+			p,
+		)
 	}
 
-	clean := filepath.Clean(p)
-
-	if clean == "." {
-		return ".", nil
-	}
-
-	if filepath.IsAbs(clean) {
-		return "", fmt.Errorf("path must be relative to repo: %q", p)
-	}
-
-	s := filepath.ToSlash(clean)
+	// Treat both slash styles as path separators regardless of runner OS.
+	s := strings.ReplaceAll(p, `\`, "/")
 
 	if strings.HasPrefix(s, "/") {
 		return "", fmt.Errorf("path must be relative to repo: %q", p)
 	}
 
-	if s == ".." || strings.HasPrefix(s, "../") {
+	if hasDrivePrefix(s) {
+		return "", fmt.Errorf(
+			"path must be relative (drive-prefixed): %q",
+			p,
+		)
+	}
+
+	clean := path.Clean(s)
+
+	if clean == "." {
+		return ".", nil
+	}
+
+	if clean == ".." || strings.HasPrefix(clean, "../") {
 		return "", fmt.Errorf("path escapes repo root: %q", p)
 	}
 
-	// Windows drive-relative "C:foo"
-	if len(s) >= 2 && s[1] == ':' && ((s[0] >= 'A' && s[0] <= 'Z') || (s[0] >= 'a' && s[0] <= 'z')) {
-		return "", fmt.Errorf("path must be relative (drive-prefixed): %q", p)
+	return filepath.FromSlash(clean), nil
+}
+
+func hasDrivePrefix(path string) bool {
+	if len(path) < 2 || path[1] != ':' {
+		return false
 	}
 
-	return clean, nil
+	first := path[0]
+	return first >= 'A' && first <= 'Z' ||
+		first >= 'a' && first <= 'z'
 }
 
 // EnsureRepoRelativePath validates a single path is repo-relative and safe.
@@ -134,9 +148,6 @@ func ParseRepoRelativePathsEnv(envVar string) ([]string, error) {
 		out = append(out, norm)
 	}
 
-	if len(out) == 0 {
-		return nil, fmt.Errorf("no valid paths found in %s", envVar)
-	}
 	return out, nil
 }
 
@@ -192,7 +203,7 @@ func ParseLang(envVar, raw string) (string, error) {
 // Caller-specified values override existing keys in dst.
 func ParseAdditionalParamsAndMerge[M ~map[string]any](dst M, raw string) error {
 	if dst == nil {
-		return fmt.Errorf("destination map must not be nil")
+		return errors.New("destination map must not be nil")
 	}
 
 	raw = strings.TrimSpace(raw)
@@ -229,7 +240,7 @@ func parseYAMLMap(s string) (map[string]any, error) {
 		return nil, err
 	}
 	if m == nil {
-		return nil, fmt.Errorf("YAML must be a mapping (key: value)")
+		return nil, errors.New("YAML must be a mapping (key: value)")
 	}
 	return m, nil
 }
@@ -242,7 +253,7 @@ func parseJSONMap(s string) (map[string]any, error) {
 		return nil, err
 	}
 	if m == nil {
-		return nil, fmt.Errorf("JSON must be an object (not null)")
+		return nil, errors.New("JSON must be an object (not null)")
 	}
 	return m, nil
 }

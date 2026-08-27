@@ -32,18 +32,26 @@ func Matches(cfg Config, path string) bool {
 	return matchesAnyTranslationRoot(cfg, cleanPath, ext)
 }
 
-func matchesAllowedExtension(path string, allowedExts map[string]struct{}) (string, string, bool) {
-	cleanPath := filepath.Clean(strings.TrimSpace(path))
-	ext := normalizeExt(filepath.Ext(cleanPath))
-	if ext == "" {
+func matchesAllowedExtension(
+	filePath string,
+	allowedExts map[string]struct{},
+) (string, string, bool) {
+	cleanPath := filepath.Clean(normalizePathSeparators(filePath))
+	lowerPath := strings.ToLower(cleanPath)
+
+	var matchedExt string
+
+	for ext := range allowedExts {
+		if strings.HasSuffix(lowerPath, "."+ext) && len(ext) > len(matchedExt) {
+			matchedExt = ext
+		}
+	}
+
+	if matchedExt == "" {
 		return "", "", false
 	}
 
-	if _, ok := allowedExts[ext]; !ok {
-		return "", "", false
-	}
-
-	return cleanPath, ext, true
+	return cleanPath, matchedExt, true
 }
 
 func matchesAnyTranslationRoot(cfg Config, cleanPath, ext string) bool {
@@ -83,30 +91,36 @@ func matchesTranslationRoot(cfg Config, rawRoot, cleanPath, baseName, ext string
 	return matchesNestedNaming(relSlash, cfg.BaseLang, cfg.AlwaysPullBase)
 }
 
-func matchesFlatNaming(relSlash, baseName, baseLang, ext string, alwaysPullBase bool) bool {
-	// In flat mode, only direct children of the translation root are allowed.
+func matchesFlatNaming(
+	relSlash,
+	baseName,
+	baseLang,
+	ext string,
+	alwaysPullBase bool,
+) bool {
 	if strings.Contains(relSlash, "/") {
 		return false
 	}
 
-	if !alwaysPullBase && baseName == baseLang+"."+ext {
+	if !alwaysPullBase &&
+		strings.EqualFold(baseName, baseLang+"."+ext) {
 		return false
 	}
 
 	return true
 }
 
-func matchesNestedNaming(relSlash, baseLang string, alwaysPullBase bool) bool {
+func matchesNestedNaming(
+	relSlash,
+	baseLang string,
+	alwaysPullBase bool,
+) bool {
 	if alwaysPullBase {
 		return true
 	}
 
-	parts := strings.Split(relSlash, "/")
-	if len(parts) > 0 && parts[0] == baseLang {
-		return false
-	}
-
-	return true
+	first, _, _ := strings.Cut(relSlash, "/")
+	return first != baseLang
 }
 
 func buildAllowedExts(fileExts []string) map[string]struct{} {
@@ -123,11 +137,11 @@ func buildAllowedExts(fileExts []string) map[string]struct{} {
 	return allowedExts
 }
 
-func relativePathWithinRoot(root, path string) (string, bool) {
-	root = filepath.Clean(strings.TrimSpace(root))
-	path = filepath.Clean(strings.TrimSpace(path))
+func relativePathWithinRoot(root, filePath string) (string, bool) {
+	root = filepath.Clean(normalizePathSeparators(root))
+	filePath = filepath.Clean(normalizePathSeparators(filePath))
 
-	rel, err := filepath.Rel(root, path)
+	rel, err := filepath.Rel(root, filePath)
 	if err != nil {
 		return "", false
 	}
@@ -146,4 +160,8 @@ func normalizeExt(ext string) string {
 	ext = strings.ToLower(strings.TrimSpace(ext))
 	ext = strings.TrimPrefix(ext, ".")
 	return ext
+}
+
+func normalizePathSeparators(value string) string {
+	return strings.ReplaceAll(strings.TrimSpace(value), `\`, "/")
 }

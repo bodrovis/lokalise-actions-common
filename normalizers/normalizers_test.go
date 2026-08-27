@@ -2,7 +2,7 @@ package normalizers
 
 import (
 	"path/filepath"
-	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -15,7 +15,10 @@ func TestNormalizeOptionalNamePattern(t *testing.T) {
 		expectError string
 	}
 
-	absPath, _ := filepath.Abs("some/abs/path")
+	absPath, err := filepath.Abs("some/abs/path")
+	if err != nil {
+		t.Fatalf("filepath.Abs: %v", err)
+	}
 
 	cases := []tc{
 		{
@@ -142,8 +145,13 @@ func TestNormalizeFileExtensions(t *testing.T) {
 		},
 		{
 			name: "skips empty values after normalization",
-			in:   []string{"", "   ", ".", "..json", " yml "},
-			want: []string{"json", "yml"},
+			in:   []string{"", "   ", ".", " yml "},
+			want: []string{"yml"},
+		},
+		{
+			name: "removes only one leading dot",
+			in:   []string{"..json"},
+			want: []string{".json"},
 		},
 		{
 			name:        "leading dot only becomes empty and is skipped",
@@ -191,7 +199,7 @@ func TestNormalizeFileExtensions(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			if !reflect.DeepEqual(got, tt.want) {
+			if !slices.Equal(got, tt.want) {
 				t.Fatalf("got %v, want %v", got, tt.want)
 			}
 		})

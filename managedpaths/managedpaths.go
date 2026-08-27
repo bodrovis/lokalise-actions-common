@@ -2,6 +2,7 @@ package managedpaths
 
 import (
 	"fmt"
+	"maps"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -60,20 +61,22 @@ func FilterManaged(scope TranslationScope, paths []string) []string {
 	return filterManagedPaths(scope.ToTranslationFilesConfig(), paths)
 }
 
-func filterManagedPaths(cfg translationfiles.Config, paths []string) []string {
-	filtered := make([]string, 0, len(paths))
+func filterManagedPaths(
+	cfg translationfiles.Config,
+	paths []string,
+) []string {
+	matched := make(map[string]struct{})
 
-	for _, p := range paths {
-		p, ok := normalizePath(p)
-		if !ok {
+	for _, path := range paths {
+		path, ok := normalizePath(path)
+		if !ok || !translationfiles.Matches(cfg, path) {
 			continue
 		}
-		if translationfiles.Matches(cfg, p) {
-			filtered = append(filtered, p)
-		}
+
+		matched[path] = struct{}{}
 	}
 
-	return mergeAndNormalize(filtered)
+	return slices.Sorted(maps.Keys(matched))
 }
 
 func collectCandidateGitPaths(r CaptureRunner) ([]string, error) {
@@ -146,43 +149,37 @@ func collectUntrackedPaths(r CaptureRunner) ([]string, error) {
 	)
 }
 
-func captureGitPathList(r CaptureRunner, errPrefix string, gitArgs ...string) ([]string, error) {
+func captureGitPathList(
+	r CaptureRunner,
+	errPrefix string,
+	gitArgs ...string,
+) ([]string, error) {
 	args := append([]string{"-c", "core.quotepath=false"}, gitArgs...)
 
 	out, err := r.Capture("git", args...)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w\nOutput: %s", errPrefix, err, out)
+		return nil, fmt.Errorf(
+			"%s: %w\nOutput: %s",
+			errPrefix,
+			err,
+			strings.TrimSpace(out),
+		)
 	}
 
-	return normalize(parseNonEmptyLines(out)), nil
+	return parseNonEmptyLines(out), nil
 }
 
 func parseNonEmptyLines(s string) []string {
-	var res []string
+	var result []string
 
-	for _, line := range strings.Split(s, "\n") {
+	for line := range strings.SplitSeq(s, "\n") {
 		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
+		if line != "" {
+			result = append(result, line)
 		}
-		res = append(res, line)
 	}
 
-	return res
-}
-
-func normalize(paths []string) []string {
-	out := make([]string, 0, len(paths))
-
-	for _, p := range paths {
-		p, ok := normalizePath(p)
-		if !ok {
-			continue
-		}
-		out = append(out, p)
-	}
-
-	return out
+	return result
 }
 
 func normalizePath(p string) (string, bool) {
@@ -197,22 +194,15 @@ func normalizePath(p string) (string, bool) {
 // normalizes separators, and sorts the result for deterministic output.
 func mergeAndNormalize(groups ...[]string) []string {
 	seen := make(map[string]struct{})
-	out := make([]string, 0)
 
 	for _, group := range groups {
-		for _, p := range group {
-			p, ok := normalizePath(p)
-			if !ok {
-				continue
+		for _, path := range group {
+			path, ok := normalizePath(path)
+			if ok {
+				seen[path] = struct{}{}
 			}
-			if _, exists := seen[p]; exists {
-				continue
-			}
-			seen[p] = struct{}{}
-			out = append(out, p)
 		}
 	}
 
-	slices.Sort(out)
-	return out
+	return slices.Sorted(maps.Keys(seen))
 }
