@@ -3,23 +3,45 @@ package normalizers
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/bodrovis/lokalise-actions-common/v2/parsers"
+
+	"github.com/bmatcuk/doublestar/v4"
 )
 
-// NormalizeOptionalNamePattern normalizes an optional repo-relative name pattern.
+// NormalizeOptionalNamePattern normalizes an optional repo-relative glob pattern.
 // Empty or whitespace-only input is allowed and returns an empty string.
-//
-// Non-empty input must be a valid repo-relative pattern.
 func NormalizeOptionalNamePattern(pattern string) (string, error) {
 	if strings.TrimSpace(pattern) == "" {
 		return "", nil
 	}
 
-	normalized, err := parsers.EnsureRepoRelativePattern(pattern)
+	normalized, err := normalizeRepoRelativeGlobPattern(pattern)
 	if err != nil {
 		return "", fmt.Errorf("invalid NAME_PATTERN %q: %w", pattern, err)
+	}
+
+	return normalized, nil
+}
+
+// NormalizeGlobPatterns normalizes repo-relative glob patterns.
+// Empty entries are ignored.
+func NormalizeGlobPatterns(patterns []string) ([]string, error) {
+	normalized := make([]string, 0, len(patterns))
+
+	for _, pattern := range patterns {
+		if strings.TrimSpace(pattern) == "" {
+			continue
+		}
+
+		value, err := normalizeRepoRelativeGlobPattern(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("invalid glob pattern %q: %w", pattern, err)
+		}
+
+		normalized = append(normalized, value)
 	}
 
 	return normalized, nil
@@ -76,4 +98,19 @@ func NormalizeFileExtensions(exts []string) ([]string, error) {
 	}
 
 	return out, nil
+}
+
+func normalizeRepoRelativeGlobPattern(pattern string) (string, error) {
+	normalized, err := parsers.EnsureRepoRelativePattern(pattern)
+	if err != nil {
+		return "", err
+	}
+
+	normalized = filepath.ToSlash(normalized)
+
+	if !doublestar.ValidatePattern(normalized) {
+		return "", errors.New("invalid glob syntax")
+	}
+
+	return normalized, nil
 }

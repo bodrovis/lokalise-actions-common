@@ -62,6 +62,11 @@ func TestNormalizeOptionalNamePattern(t *testing.T) {
 			expectError: "escapes repo root",
 		},
 		{
+			name:        "invalid glob pattern is forbidden",
+			in:          "[abc.resx",
+			expectError: "invalid glob syntax",
+		},
+		{
 			name:        "parent escape after clean is forbidden",
 			in:          "a/../../b/*.json",
 			expectError: "escapes repo root",
@@ -201,6 +206,126 @@ func TestNormalizeFileExtensions(t *testing.T) {
 
 			if !slices.Equal(got, tt.want) {
 				t.Fatalf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeGlobPatterns(t *testing.T) {
+	type tc struct {
+		name        string
+		in          []string
+		want        []string
+		expectError string
+	}
+
+	tests := []tc{
+		{
+			name: "single pattern",
+			in:   []string{"*.resx"},
+			want: []string{"*.resx"},
+		},
+		{
+			name: "multiple patterns",
+			in: []string{
+				"*.de-DE.resx",
+				"**/*.fr-FR.resx",
+			},
+			want: []string{
+				"*.de-DE.resx",
+				"**/*.fr-FR.resx",
+			},
+		},
+		{
+			name: "whitespace is trimmed",
+			in: []string{
+				"  *.de-DE.resx  ",
+				"\t**/*.fr-FR.resx\n",
+			},
+			want: []string{
+				"*.de-DE.resx",
+				"**/*.fr-FR.resx",
+			},
+		},
+		{
+			name: "empty patterns are ignored",
+			in: []string{
+				"",
+				"   ",
+				"*.resx",
+			},
+			want: []string{"*.resx"},
+		},
+		{
+			name: "all empty patterns result in empty slice",
+			in: []string{
+				"",
+				"   ",
+			},
+			want: []string{},
+		},
+		{
+			name:        "parent escape is forbidden",
+			in:          []string{"../outside/*.resx"},
+			expectError: "escapes repo root",
+		},
+		{
+			name:        "parent escape after clean is forbidden",
+			in:          []string{"a/../../b/*.resx"},
+			expectError: "escapes repo root",
+		},
+		{
+			name:        "absolute path is forbidden",
+			in:          []string{"/tmp/*.resx"},
+			expectError: "must be relative to repo",
+		},
+		{
+			name:        "drive-prefixed path is forbidden",
+			in:          []string{`C:\resources\*.resx`},
+			expectError: "drive-prefixed",
+		},
+		{
+			name:        "invalid glob pattern is forbidden",
+			in:          []string{"[abc.resx"},
+			expectError: "invalid glob pattern",
+		},
+		{
+			name: "brace pattern is allowed",
+			in: []string{
+				"*.{da-DK,de-DE,fr-FR}.resx",
+			},
+			want: []string{
+				"*.{da-DK,de-DE,fr-FR}.resx",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NormalizeGlobPatterns(tt.in)
+
+			if tt.expectError != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tt.expectError)
+				}
+
+				if !strings.Contains(err.Error(), tt.expectError) {
+					t.Fatalf(
+						"expected error containing %q, got %q",
+						tt.expectError,
+						err.Error(),
+					)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("got %#v, want %#v", got, tt.want)
 			}
 		})
 	}
