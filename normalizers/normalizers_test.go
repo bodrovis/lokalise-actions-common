@@ -136,7 +136,7 @@ func TestNormalizeFileExtensions(t *testing.T) {
 		{
 			name: "trims whitespace removes leading dot and lowercases",
 			in:   []string{" .JSON "},
-			want: []string{"json"},
+			want: []string{"JSON"},
 		},
 		{
 			name: "multiple extensions preserve first-seen order",
@@ -144,9 +144,19 @@ func TestNormalizeFileExtensions(t *testing.T) {
 			want: []string{"yaml", "json", "xml"},
 		},
 		{
+			name: "preserves extension case",
+			in:   []string{".JSON", " YAML ", "tar.GZ"},
+			want: []string{"JSON", "YAML", "tar.GZ"},
+		},
+		{
+			name: "deduplicates after trimming and removing leading dots",
+			in:   []string{".JSON", " JSON ", "json", ".yaml", "yaml"},
+			want: []string{"JSON", "json", "yaml"},
+		},
+		{
 			name: "deduplicates after normalization",
-			in:   []string{".JSON", " json ", "Json", ".yaml", "YAML"},
-			want: []string{"json", "yaml"},
+			in:   []string{".JSON", " JSON ", "json", ".yaml", "yaml", "YAML"},
+			want: []string{"JSON", "json", "yaml", "YAML"},
 		},
 		{
 			name: "skips empty values after normalization",
@@ -185,8 +195,8 @@ func TestNormalizeFileExtensions(t *testing.T) {
 		},
 		{
 			name: "preserves first normalized occurrence",
-			in:   []string{" .YML ", "json", "yml", ".JSON"},
-			want: []string{"yml", "json"},
+			in:   []string{" .YML ", "json", "yml", ".YML", ".json"},
+			want: []string{"YML", "json", "yml"},
 		},
 	}
 

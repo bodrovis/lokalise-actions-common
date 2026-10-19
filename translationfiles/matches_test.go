@@ -61,7 +61,7 @@ func TestMatches(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "compound extension matching is case insensitive",
+			name: "compound extension matching is case sensitive",
 			cfg: Config{
 				TranslationPaths: []string{"locales"},
 				FileExts:         []string{"tar.gz"},
@@ -70,6 +70,18 @@ func TestMatches(t *testing.T) {
 				BaseLang:         "en",
 			},
 			path: filepath.Join("locales", "fr.TAR.GZ"),
+			want: false,
+		},
+		{
+			name: "flat base language exclusion is case sensitive",
+			cfg: Config{
+				TranslationPaths: []string{"locales"},
+				FileExts:         []string{"strings"},
+				FlatNaming:       true,
+				AlwaysPullBase:   false,
+				BaseLang:         "en",
+			},
+			path: filepath.Join("locales", "EN.strings"),
 			want: true,
 		},
 		{
@@ -310,7 +322,7 @@ func TestMatches(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "extension matching is case insensitive",
+			name: "uppercase extension matches when explicitly allowed",
 			cfg: Config{
 				TranslationPaths: []string{"locales"},
 				FileExts:         []string{"STRINGS"},
@@ -413,10 +425,10 @@ func TestRelativePathWithinRoot(t *testing.T) {
 			wantOK:  true,
 		},
 		{
-			name:    "whitespace is trimmed",
-			root:    "  locales  ",
-			path:    "  " + filepath.Join("locales", "fr.strings") + "  ",
-			wantRel: "fr.strings",
+			name:    "preserves whitespace in filename",
+			root:    "locales",
+			path:    filepath.Join("locales", " fr.strings "),
+			wantRel: " fr.strings ",
 			wantOK:  true,
 		},
 	}
@@ -455,7 +467,10 @@ func TestBuildAllowedExts(t *testing.T) {
 		t.Fatal(`buildAllowedExts() missing "tar.gz"`)
 	}
 
-	if len(got) != 3 {
-		t.Fatalf("buildAllowedExts() len = %d, want 3", len(got))
+	if len(got) != 4 {
+		t.Fatalf("buildAllowedExts() len = %d, want 4", len(got))
+	}
+	if _, ok := got["STRINGS"]; !ok {
+		t.Fatal(`buildAllowedExts() missing "STRINGS"`)
 	}
 }

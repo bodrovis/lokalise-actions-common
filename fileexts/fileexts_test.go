@@ -49,7 +49,7 @@ func TestResolveFromEnv_NormalizesExtensions(t *testing.T) {
 		t.Fatalf("ResolveFromEnv returned error: %v", err)
 	}
 
-	want := []string{"json", "strings", "stringsdict"}
+	want := []string{"JSON", "strings", "STRINGSdict"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("extensions mismatch.\n got: %#v\nwant: %#v", got, want)
 	}
@@ -64,7 +64,22 @@ func TestResolveFromEnv_TrimsFileFormatFallback(t *testing.T) {
 		t.Fatalf("ResolveFromEnv returned error: %v", err)
 	}
 
-	want := []string{"yaml"}
+	want := []string{"YAML"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("extensions mismatch.\n got: %#v\nwant: %#v", got, want)
+	}
+}
+
+func TestResolveFromEnv_PreservesDistinctExtensionCases(t *testing.T) {
+	t.Setenv("FILE_EXT", "json\n.JSON\n.json\nJSON")
+	t.Setenv("FILE_FORMAT", "")
+
+	got, err := ResolveFromEnv("FILE_EXT", "FILE_FORMAT")
+	if err != nil {
+		t.Fatalf("ResolveFromEnv returned error: %v", err)
+	}
+
+	want := []string{"json", "JSON"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("extensions mismatch.\n got: %#v\nwant: %#v", got, want)
 	}

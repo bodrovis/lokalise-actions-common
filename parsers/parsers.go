@@ -192,8 +192,17 @@ func ParseLang(envVar, raw string) (string, error) {
 	if lang == "" {
 		return "", fmt.Errorf("%s environment variable is not set or empty", envVar)
 	}
+
+	if lang == "." || lang == ".." {
+		return "", fmt.Errorf("%s must not be a dot or parent directory", envVar)
+	}
+
 	if strings.ContainsAny(lang, `/\`) {
 		return "", fmt.Errorf("%s must not contain path separators", envVar)
+	}
+
+	if strings.ContainsAny(lang, "*?[]\x00") {
+		return "", fmt.Errorf("%s contains invalid characters", envVar)
 	}
 
 	return lang, nil

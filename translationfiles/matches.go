@@ -14,7 +14,6 @@ type Config struct {
 }
 
 func Matches(cfg Config, path string) bool {
-	path = strings.TrimSpace(path)
 	if path == "" {
 		return false
 	}
@@ -37,12 +36,11 @@ func matchesAllowedExtension(
 	allowedExts map[string]struct{},
 ) (string, string, bool) {
 	cleanPath := filepath.Clean(normalizePathSeparators(filePath))
-	lowerPath := strings.ToLower(cleanPath)
 
 	var matchedExt string
 
 	for ext := range allowedExts {
-		if strings.HasSuffix(lowerPath, "."+ext) && len(ext) > len(matchedExt) {
+		if strings.HasSuffix(cleanPath, "."+ext) && len(ext) > len(matchedExt) {
 			matchedExt = ext
 		}
 	}
@@ -102,8 +100,7 @@ func matchesFlatNaming(
 		return false
 	}
 
-	if !alwaysPullBase &&
-		strings.EqualFold(baseName, baseLang+"."+ext) {
+	if !alwaysPullBase && baseName == baseLang+"."+ext {
 		return false
 	}
 
@@ -157,11 +154,11 @@ func relativePathWithinRoot(root, filePath string) (string, bool) {
 }
 
 func normalizeExt(ext string) string {
-	ext = strings.ToLower(strings.TrimSpace(ext))
+	ext = strings.TrimSpace(ext)
 	ext = strings.TrimPrefix(ext, ".")
 	return ext
 }
 
 func normalizePathSeparators(value string) string {
-	return strings.ReplaceAll(strings.TrimSpace(value), `\`, "/")
+	return strings.ReplaceAll(value, `\`, "/")
 }

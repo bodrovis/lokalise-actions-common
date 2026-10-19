@@ -109,7 +109,7 @@ func TestFilterManaged(t *testing.T) {
 				BaseLang:       "en",
 			},
 			paths: []string{
-				"  " + p("locales", "fr.strings") + "  ",
+				p("locales", "fr.strings"),
 				p("locales", "de.strings"),
 				p("locales", "fr.strings"),
 				p("other", "skip.strings"),
@@ -309,11 +309,11 @@ func TestCollectChangedTrackedPaths(t *testing.T) {
 			runner: mockCaptureRunner{
 				outputs: map[string]string{
 					captureKey("git", "rev-parse", "--verify", "HEAD"): "ok",
-					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "HEAD"): strings.Join([]string{
-						"  " + p("locales", "fr.strings") + "  ",
+					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "-z", "HEAD"): strings.Join([]string{
+						p("locales", "fr.strings"),
 						p("locales", "de.strings"),
 						"",
-					}, "\n"),
+					}, "\x00"),
 				},
 			},
 			want: []string{
@@ -326,14 +326,14 @@ func TestCollectChangedTrackedPaths(t *testing.T) {
 			runner: mockCaptureRunner{
 				outputs: map[string]string{
 					captureKey("git", "rev-parse", "--verify", "HEAD"): "",
-					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "--cached"): strings.Join([]string{
+					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "-z", "--cached"): strings.Join([]string{
 						p("locales", "fr.strings"),
 						p("locales", "de.strings"),
-					}, "\n"),
-					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only"): strings.Join([]string{
+					}, "\x00"),
+					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "-z"): strings.Join([]string{
 						p("locales", "de.strings"),
 						p("locales", "it.strings"),
-					}, "\n"),
+					}, "\x00"),
 				},
 				errors: map[string]error{
 					captureKey("git", "rev-parse", "--verify", "HEAD"): errors.New("no HEAD"),
@@ -349,11 +349,11 @@ func TestCollectChangedTrackedPaths(t *testing.T) {
 			name: "returns error when HEAD diff fails",
 			runner: mockCaptureRunner{
 				outputs: map[string]string{
-					captureKey("git", "rev-parse", "--verify", "HEAD"):                             "ok",
-					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "HEAD"): "boom",
+					captureKey("git", "rev-parse", "--verify", "HEAD"):                                   "ok",
+					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "-z", "HEAD"): "boom",
 				},
 				errors: map[string]error{
-					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "HEAD"): errors.New("diff failed"),
+					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "-z", "HEAD"): errors.New("diff failed"),
 				},
 			},
 			wantErrContain: "git diff HEAD failed",
@@ -362,12 +362,12 @@ func TestCollectChangedTrackedPaths(t *testing.T) {
 			name: "returns error when cached diff fails in no HEAD mode",
 			runner: mockCaptureRunner{
 				outputs: map[string]string{
-					captureKey("git", "rev-parse", "--verify", "HEAD"):                                 "",
-					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "--cached"): "cached fail",
+					captureKey("git", "rev-parse", "--verify", "HEAD"):                                       "",
+					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "-z", "--cached"): "cached fail",
 				},
 				errors: map[string]error{
-					captureKey("git", "rev-parse", "--verify", "HEAD"):                                 errors.New("no HEAD"),
-					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "--cached"): errors.New("cached failed"),
+					captureKey("git", "rev-parse", "--verify", "HEAD"):                                       errors.New("no HEAD"),
+					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "-z", "--cached"): errors.New("cached failed"),
 				},
 			},
 			wantErrContain: "git diff --cached (no HEAD) failed",
@@ -376,13 +376,13 @@ func TestCollectChangedTrackedPaths(t *testing.T) {
 			name: "returns error when worktree diff fails in no HEAD mode",
 			runner: mockCaptureRunner{
 				outputs: map[string]string{
-					captureKey("git", "rev-parse", "--verify", "HEAD"):                                 "",
-					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "--cached"): p("locales", "fr.strings"),
-					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only"):             "worktree fail",
+					captureKey("git", "rev-parse", "--verify", "HEAD"):                                       "",
+					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "-z", "--cached"): p("locales", "fr.strings"),
+					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "-z"):             "worktree fail",
 				},
 				errors: map[string]error{
-					captureKey("git", "rev-parse", "--verify", "HEAD"):                     errors.New("no HEAD"),
-					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only"): errors.New("worktree failed"),
+					captureKey("git", "rev-parse", "--verify", "HEAD"):                           errors.New("no HEAD"),
+					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "-z"): errors.New("worktree failed"),
 				},
 			},
 			wantErrContain: "git diff (worktree) failed",
@@ -419,10 +419,11 @@ func TestCollectUntrackedPaths(t *testing.T) {
 			name: "success",
 			runner: mockCaptureRunner{
 				outputs: map[string]string{
-					captureKey("git", "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard"): strings.Join([]string{
-						"  " + p("locales", "fr.strings") + "  ",
+					captureKey("git", "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard", "-z"): strings.Join([]string{
+						p("locales", "fr.strings"),
 						p("locales", "de.strings"),
-					}, "\n"),
+						"",
+					}, "\x00"),
 				},
 			},
 			want: []string{
@@ -434,10 +435,10 @@ func TestCollectUntrackedPaths(t *testing.T) {
 			name: "error",
 			runner: mockCaptureRunner{
 				outputs: map[string]string{
-					captureKey("git", "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard"): "ls-files fail",
+					captureKey("git", "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard", "-z"): "ls-files fail",
 				},
 				errors: map[string]error{
-					captureKey("git", "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard"): errors.New("ls-files failed"),
+					captureKey("git", "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard", "-z"): errors.New("ls-files failed"),
 				},
 			},
 			wantErrContain: "git ls-files failed",
@@ -486,14 +487,15 @@ func TestCollectManagedGitPaths(t *testing.T) {
 			runner: mockCaptureRunner{
 				outputs: map[string]string{
 					captureKey("git", "rev-parse", "--verify", "HEAD"): "ok",
-					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "HEAD"): strings.Join([]string{
+					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "-z", "HEAD"): strings.Join([]string{
 						p("path", "to", "package", "localizables", "fr.stringsdict"),
 						p("path", "to", "app", "supporting-files", "fr.strings"),
 						p("path", "to", "app", "supporting-files", "en.strings"),
 						p("path", "to", "package", "localizables", "deleted.strings"),
 						p("other", "place", "nope.json"),
-					}, "\n"),
-					captureKey("git", "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard"): "",
+						"",
+					}, "\x00"),
+					captureKey("git", "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard", "-z"): "",
 				},
 			},
 			want: []string{
@@ -513,12 +515,13 @@ func TestCollectManagedGitPaths(t *testing.T) {
 			},
 			runner: mockCaptureRunner{
 				outputs: map[string]string{
-					captureKey("git", "rev-parse", "--verify", "HEAD"):                             "ok",
-					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "HEAD"): "",
-					captureKey("git", "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard"): strings.Join([]string{
+					captureKey("git", "rev-parse", "--verify", "HEAD"):                                   "ok",
+					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "-z", "HEAD"): "",
+					captureKey("git", "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard", "-z"): strings.Join([]string{
 						p("locales", "fr", "Localizable.strings"),
 						p("other", "ignore.strings"),
-					}, "\n"),
+						"",
+					}, "\x00"),
 				},
 			},
 			want: []string{
@@ -537,12 +540,13 @@ func TestCollectManagedGitPaths(t *testing.T) {
 			runner: mockCaptureRunner{
 				outputs: map[string]string{
 					captureKey("git", "rev-parse", "--verify", "HEAD"): "ok",
-					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "HEAD"): strings.Join([]string{
+					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "-z", "HEAD"): strings.Join([]string{
 						p("other", "file.strings"),
 						p("locales", "nested", "fr.strings"),
 						p("locales", "en.strings"),
-					}, "\n"),
-					captureKey("git", "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard"): "",
+						"",
+					}, "\x00"),
+					captureKey("git", "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard", "-z"): "",
 				},
 			},
 			want: []string{},
@@ -558,11 +562,11 @@ func TestCollectManagedGitPaths(t *testing.T) {
 			},
 			runner: mockCaptureRunner{
 				outputs: map[string]string{
-					captureKey("git", "rev-parse", "--verify", "HEAD"):                             "ok",
-					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "HEAD"): "boom",
+					captureKey("git", "rev-parse", "--verify", "HEAD"):                                   "ok",
+					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "-z", "HEAD"): "boom",
 				},
 				errors: map[string]error{
-					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "HEAD"): errors.New("diff failed"),
+					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "-z", "HEAD"): errors.New("diff failed"),
 				},
 			},
 			wantErrContain: "git diff HEAD failed",
@@ -578,12 +582,12 @@ func TestCollectManagedGitPaths(t *testing.T) {
 			},
 			runner: mockCaptureRunner{
 				outputs: map[string]string{
-					captureKey("git", "rev-parse", "--verify", "HEAD"):                                            "ok",
-					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "HEAD"):                "",
-					captureKey("git", "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard"): "boom",
+					captureKey("git", "rev-parse", "--verify", "HEAD"):                                                  "ok",
+					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "-z", "HEAD"):                "",
+					captureKey("git", "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard", "-z"): "boom",
 				},
 				errors: map[string]error{
-					captureKey("git", "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard"): errors.New("ls-files failed"),
+					captureKey("git", "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard", "-z"): errors.New("ls-files failed"),
 				},
 			},
 			wantErrContain: "git ls-files failed",
@@ -628,9 +632,9 @@ func TestHasManagedGitPaths(t *testing.T) {
 			},
 			runner: mockCaptureRunner{
 				outputs: map[string]string{
-					captureKey("git", "rev-parse", "--verify", "HEAD"):                                            "ok",
-					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "HEAD"):                p("locales", "fr", "Localizable.strings"),
-					captureKey("git", "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard"): "",
+					captureKey("git", "rev-parse", "--verify", "HEAD"):                                                  "ok",
+					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "-z", "HEAD"):                p("locales", "fr", "Localizable.strings"),
+					captureKey("git", "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard", "-z"): "",
 				},
 			},
 			want: true,
@@ -646,9 +650,9 @@ func TestHasManagedGitPaths(t *testing.T) {
 			},
 			runner: mockCaptureRunner{
 				outputs: map[string]string{
-					captureKey("git", "rev-parse", "--verify", "HEAD"):                                            "ok",
-					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "HEAD"):                p("other", "file.strings"),
-					captureKey("git", "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard"): "",
+					captureKey("git", "rev-parse", "--verify", "HEAD"):                                                  "ok",
+					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "-z", "HEAD"):                p("other", "file.strings"),
+					captureKey("git", "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard", "-z"): "",
 				},
 			},
 			want: false,
@@ -664,11 +668,11 @@ func TestHasManagedGitPaths(t *testing.T) {
 			},
 			runner: mockCaptureRunner{
 				outputs: map[string]string{
-					captureKey("git", "rev-parse", "--verify", "HEAD"):                             "ok",
-					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "HEAD"): "boom",
+					captureKey("git", "rev-parse", "--verify", "HEAD"):                                   "ok",
+					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "-z", "HEAD"): "boom",
 				},
 				errors: map[string]error{
-					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "HEAD"): errors.New("diff failed"),
+					captureKey("git", "-c", "core.quotepath=false", "diff", "--name-only", "-z", "HEAD"): errors.New("diff failed"),
 				},
 			},
 			wantErrContain: "git diff HEAD failed",
@@ -699,13 +703,12 @@ func TestMergeAndNormalize(t *testing.T) {
 
 	got := mergeAndNormalize(
 		[]string{
-			"  " + p("locales", "fr.strings") + "  ",
+			p("locales", "fr.strings"),
 			p("locales", "de.strings"),
 		},
 		[]string{
 			p("locales", "fr.strings"),
 			"",
-			"   ",
 			p("locales", "it.strings"),
 		},
 	)
@@ -714,6 +717,24 @@ func TestMergeAndNormalize(t *testing.T) {
 		p("locales", "de.strings"),
 		p("locales", "fr.strings"),
 		p("locales", "it.strings"),
+	}
+
+	assertEqualStrings(t, got, want)
+}
+
+func TestMergeAndNormalizePreservesWhitespace(t *testing.T) {
+	t.Parallel()
+
+	got := mergeAndNormalize(
+		[]string{
+			p("locales", "fr.strings"),
+			p("locales", " fr.strings "),
+		},
+	)
+
+	want := []string{
+		p("locales", " fr.strings "),
+		p("locales", "fr.strings"),
 	}
 
 	assertEqualStrings(t, got, want)

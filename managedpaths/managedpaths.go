@@ -113,7 +113,7 @@ func collectChangedTrackedPathsFromHEAD(r CaptureRunner) ([]string, error) {
 	return captureGitPathList(
 		r,
 		"git diff HEAD failed",
-		"diff", "--name-only", "HEAD",
+		"diff", "--name-only", "-z", "HEAD",
 	)
 }
 
@@ -123,7 +123,7 @@ func collectChangedTrackedPathsWithoutHEAD(r CaptureRunner) ([]string, error) {
 	cached, err := captureGitPathList(
 		r,
 		"git diff --cached (no HEAD) failed",
-		"diff", "--name-only", "--cached",
+		"diff", "--name-only", "-z", "--cached",
 	)
 	if err != nil {
 		return nil, err
@@ -132,7 +132,7 @@ func collectChangedTrackedPathsWithoutHEAD(r CaptureRunner) ([]string, error) {
 	worktree, err := captureGitPathList(
 		r,
 		"git diff (worktree) failed",
-		"diff", "--name-only",
+		"diff", "--name-only", "-z",
 	)
 	if err != nil {
 		return nil, err
@@ -145,7 +145,7 @@ func collectUntrackedPaths(r CaptureRunner) ([]string, error) {
 	return captureGitPathList(
 		r,
 		"git ls-files failed",
-		"ls-files", "--others", "--exclude-standard",
+		"ls-files", "--others", "--exclude-standard", "-z",
 	)
 }
 
@@ -166,16 +166,15 @@ func captureGitPathList(
 		)
 	}
 
-	return parseNonEmptyLines(out), nil
+	return parseGitPaths(out), nil
 }
 
-func parseNonEmptyLines(s string) []string {
+func parseGitPaths(s string) []string {
 	var result []string
 
-	for line := range strings.SplitSeq(s, "\n") {
-		line = strings.TrimSpace(line)
-		if line != "" {
-			result = append(result, line)
+	for path := range strings.SplitSeq(s, "\x00") {
+		if path != "" {
+			result = append(result, path)
 		}
 	}
 
@@ -183,11 +182,11 @@ func parseNonEmptyLines(s string) []string {
 }
 
 func normalizePath(p string) (string, bool) {
-	p = filepath.ToSlash(strings.TrimSpace(p))
 	if p == "" {
 		return "", false
 	}
-	return p, true
+
+	return filepath.ToSlash(p), true
 }
 
 // mergeAndNormalize flattens path groups, drops empty entries, removes duplicates,

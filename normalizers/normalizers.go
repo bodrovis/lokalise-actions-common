@@ -52,8 +52,8 @@ func NormalizeGlobPatterns(patterns []string) ([]string, error) {
 // Behavior:
 //   - trims surrounding whitespace
 //   - removes a leading dot (".json" -> "json")
-//   - lowercases all values
-//   - removes duplicates while preserving order
+//   - preserves the original case
+//   - removes duplicates (case-sensitive) while preserving order
 //   - skips empty values after normalization
 //
 // Errors:
@@ -62,8 +62,8 @@ func NormalizeGlobPatterns(patterns []string) ([]string, error) {
 //
 // Example:
 //
-//	input:  []string{".JSON", " yaml ", "json", ""}
-//	output: []string{"json", "yaml"}
+//	input:  []string{".JSON", " yaml ", "json", ".JSON", ""}
+//	output: []string{"JSON", "yaml", "json"}
 func NormalizeFileExtensions(exts []string) ([]string, error) {
 	if len(exts) == 0 {
 		return nil, errors.New("no file extensions provided")
@@ -75,7 +75,6 @@ func NormalizeFileExtensions(exts []string) ([]string, error) {
 	for _, raw := range exts {
 		ext := strings.TrimSpace(raw)
 		ext = strings.TrimPrefix(ext, ".")
-		ext = strings.ToLower(ext)
 
 		if ext == "" {
 			continue

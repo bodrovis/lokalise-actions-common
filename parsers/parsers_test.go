@@ -792,6 +792,48 @@ func TestParseLang(t *testing.T) {
 			raw:     `foo\bar`,
 			wantErr: "BASE_LANG must not contain path separators",
 		},
+		{
+			name:    "rejects current directory",
+			envVar:  "BASE_LANG",
+			raw:     ".",
+			wantErr: "BASE_LANG must not be a dot or parent directory",
+		},
+		{
+			name:    "rejects parent directory",
+			envVar:  "BASE_LANG",
+			raw:     "..",
+			wantErr: "BASE_LANG must not be a dot or parent directory",
+		},
+		{
+			name:    "rejects glob wildcard",
+			envVar:  "BASE_LANG",
+			raw:     "*",
+			wantErr: "BASE_LANG contains invalid characters",
+		},
+		{
+			name:    "rejects glob question mark",
+			envVar:  "BASE_LANG",
+			raw:     "en?",
+			wantErr: "BASE_LANG contains invalid characters",
+		},
+		{
+			name:    "rejects glob character class",
+			envVar:  "BASE_LANG",
+			raw:     "en[0-9]",
+			wantErr: "BASE_LANG contains invalid characters",
+		},
+		{
+			name:    "rejects NUL byte",
+			envVar:  "BASE_LANG",
+			raw:     "en\x00",
+			wantErr: "BASE_LANG contains invalid characters",
+		},
+		{
+			name:   "lang with script subtag",
+			envVar: "BASE_LANG",
+			raw:    "zh-Hant-TW",
+			want:   "zh-Hant-TW",
+		},
 	}
 
 	for _, tt := range tests {
